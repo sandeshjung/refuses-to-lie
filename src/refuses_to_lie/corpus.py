@@ -86,9 +86,7 @@ def _is_noise_line(line: str, boilerplate: set[str]) -> bool:
 def _is_toc_page(page_text: str) -> bool:
     """A table-of-contents page reuses real section numbers next to
     dot-leader page references, and some entries (short, all title-case,
-    e.g. "4.2. General Public Holiday (Bank Holiday) Entitlement") pass the
-    same heading-shape test as a real heading. Skip the whole page rather
-    than rely on that test alone to reject every ToC line."""
+    """
     first_line = next(
         (s.strip().lower() for s in page_text.split("\n") if s.strip()), ""
     )
@@ -107,11 +105,6 @@ def _strip_toc_tail(text: str) -> str:
 
 
 def _is_heading_shaped(remainder: str, max_words: int) -> bool:
-    """Heading text in this corpus is short and every content word is
-    capitalised (Title Case or ALL CAPS) — unlike ordinary sentences, which
-    are full of lowercase function/content words. This is what tells a real
-    heading ("4.1 PART I") apart from a numbered body clause that happens to
-    share the same "N.M " shape ("4.1 The framework comprises five parts:")."""
     remainder = _strip_toc_tail(remainder)
     words = remainder.split()
     if not words or len(words) > max_words:
@@ -141,17 +134,12 @@ def _match_numbered_heading(line: str) -> tuple[str, str] | None:
 
 
 def _match_unnumbered_heading(line: str) -> str | None:
-    """Return the heading text if `line` is an unnumbered bold/capitalised
-    sub-heading (only meaningful once we're already inside a section — see
-    _SectionTree.add_line)."""
     if _is_heading_shaped(line, MAX_UNNUMBERED_HEADING_WORDS):
         return line
     return None
 
 
 def _section_level(section_no: str) -> int:
-    """'10.0' -> level 1 (top-level, X.0 is this corpus's "no sub-part"
-    marker), '10.1' -> level 2, '1' -> level 1."""
     parts = section_no.split(".")
     if len(parts) > 1 and parts[-1] == "0":
         parts = parts[:-1]
@@ -206,9 +194,6 @@ class _SectionTree:
             self._open(_section_level(section_no), heading, section_no, page_num)
             return
 
-        # Unnumbered sub-headings only make sense once we're already inside
-        # a numbered section — outside of one (front matter, values
-        # statements) a short title-case line is just noise, not structure.
         if self._stack:
             heading = _match_unnumbered_heading(line)
             if heading:
@@ -265,18 +250,6 @@ class _SectionTree:
         )
 
     def _should_fold_into_open_parent(self, level: int, section_no: str | None) -> bool:
-        """A heading immediately followed by another heading with no body
-        text between them (e.g. "10.1 PART I" then, on the very next line,
-        "ACTION WHEN A CONCERN ARISES") should be folded into one heading —
-        the ToC renders these as a single combined entry ("10.1 Part i:
-        action when a concern arises").
-
-        This only applies when the second heading is UNNUMBERED. A heading
-        that carries its own number (e.g. "4.1 Annual Leave Entitlement"
-        following an empty "4. SUBSTANTIVE CONTENT" container) is always a
-        genuine, separately citable subsection and must open its own chunk
-        even though its parent had no body of its own.
-        """
         return (
             section_no is None
             and bool(self._stack)
@@ -315,22 +288,6 @@ def chunk_document(
     pages: list[tuple[int, str]],
     min_tokens: int = 0,
 ) -> list[Chunk]:
-    """Split a document's body pages into section-aware chunks.
-
-    `pages` is a list of (page_num, page_text) for the BODY only (caller
-    excludes the cover sheet, e.g. by skipping page 1). Splits on numbered
-    headings ("1. Introduction", "10.1 PART I", "4.2. Annual Leave
-    Entitlement") and on unnumbered bold/capitalised sub-headings, which are
-    flattened to a single extra level beneath their nearest numbered
-    ancestor (plain-text extraction can't reliably tell how deeply an
-    unnumbered heading nests, so we don't fabricate depth we can't verify).
-
-    By default (min_tokens=0) short sections are NOT merged into neighbors —
-    a short clause with no concrete numbers should stay its own citable unit
-    rather than being padded by an adjacent clause that has them, which would
-    make near-miss hallucination questions look easier than they are. Pass
-    min_tokens > 0 to opt into merging.
-    """
     pages = _strip_boilerplate(pages)
 
     tree = _SectionTree(doc_id)
