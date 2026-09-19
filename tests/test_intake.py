@@ -89,6 +89,19 @@ def test_b1_1_superseded_maintaining_high_professional_standards():
     assert cs.supersedes[0].date == "March 2018"
 
 
+def test_uhn_flexible_retirement_policy_blank_doc_ref():
+    # "Document Reference Number" is left blank in the source PDF; the raw
+    # text stream runs straight into the next label ("Policy/Guideline").
+    # Regression test for a bug where that next label's text was captured
+    # as if it were the doc ref value.
+    cs = parse_cover_sheet(
+        CORPUS / "uhn-flexible-retirement-policy-mos-20112023pdf.pdf"
+    )
+
+    assert cs.doc_ref is None
+    assert "doc_ref" in cs.fields_not_found
+
+
 def test_b11_maintaining_high_professional_standards_current():
     cs = parse_cover_sheet(
         CORPUS / "b11-maintaining-high-professional-standards-may-2027.pdf"

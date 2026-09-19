@@ -31,7 +31,39 @@ _DATE_RE = re.compile(
 )
 _NEW_ENTRY_PREFIX_RE = re.compile(r"^[A-Z]{2,6}\s*[-–—]")
 _HEADER_FRAGMENT_RE = re.compile(r"^[A-Z][a-z]+$")
-_DOC_REF_NUMBER_RE = re.compile(r"Document Reference Number:?\s*([^\n]+)")
+_DOC_REF_NUMBER_RE = re.compile(
+    r"Document Reference Number\s*[:\-–—]?\s*([^\n]+)"
+)
+
+_KNOWN_LABEL_TEXT = {
+    "policy/guideline",
+    "policy/guideline title",
+    "policy title",
+    "executive summary",
+    "supersedes",
+    "description of amendment(s)",
+    "this policy will impact on",
+    "financial implications",
+    "policy area",
+    "version number",
+    "issued by",
+    "expiry date",
+    "approval date",
+    "review date",
+    "author",
+    "impact assessment",
+    "impact assessment date",
+    "document reference",
+}
+
+
+def _looks_like_label(value_norm_lower: str) -> bool:
+    if _classify_label(value_norm_lower) is not None:
+        return True
+    return any(
+        value_norm_lower == label or label.startswith(value_norm_lower)
+        for label in _KNOWN_LABEL_TEXT
+    )
 
 
 @dataclass
@@ -133,7 +165,11 @@ def _extract_standalone_doc_ref(page_text: str) -> str | None:
     if not match:
         return None
     value = match.group(1).strip()
-    return value or None
+    if not value:
+        return None
+    if _looks_like_label(_normalize(value).lower()):
+        return None
+    return value
 
 
 def parse_cover_sheet(path: Path) -> CoverSheet:
