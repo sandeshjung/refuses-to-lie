@@ -1,0 +1,17 @@
+[project]
+name = "refuses-to-lie"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Sandesh Jung Kunwar", email = "sandeshjung@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+refuses-to-lie = "refuses_to_lie:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
