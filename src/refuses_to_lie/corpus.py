@@ -9,6 +9,7 @@ import pdfplumber
 
 MAX_NUMBERED_HEADING_WORDS = 10
 MAX_UNNUMBERED_HEADING_WORDS = 8
+MAX_PLAIN_ENGLISH_HEADING_WORDS = 6
 
 _NUM_RE = re.compile(r"^(\d+(?:\.\d+)*)\.?\s+(\S.*)$")
 _STOPWORDS = {
@@ -122,15 +123,44 @@ def _is_heading_shaped(remainder: str, max_words: int) -> bool:
     return True
 
 
-def _match_numbered_heading(line: str) -> tuple[str, str] | None:
+def _is_plain_english_heading_shaped(remainder: str, max_words: int) -> bool:
+    remainder = _strip_toc_tail(remainder)
+    words = remainder.split()
+    if not words or len(words) > max_words:
+        return False
+    if not remainder[0].isupper():
+        return False
+    if remainder.rstrip().endswith((".", ",", ";", ":", "?", "!")):
+        return False
+    return True
+
+
+def _document_uses_dotted_numbering(pages: list[tuple[int, str]]) -> bool:
+    for _, text in pages:
+        for line in text.split("\n"):
+            m = _NUM_RE.match(line.strip())
+            if m and "." in m.group(1):
+                return True
+    return False
+
+
+def _match_numbered_heading(
+    line: str, allow_plain_english: bool = False
+) -> tuple[str, str] | None:
     """Return (section_no, heading_text) if `line` is a numbered heading."""
     m = _NUM_RE.match(line)
     if not m:
         return None
     no, remainder = m.groups()
-    if not _is_heading_shaped(remainder, MAX_NUMBERED_HEADING_WORDS):
-        return None
-    return no, _strip_toc_tail(remainder)
+    if _is_heading_shaped(remainder, MAX_NUMBERED_HEADING_WORDS):
+        return no, _strip_toc_tail(remainder)
+    if (
+        allow_plain_english
+        and "." not in no
+        and _is_plain_english_heading_shaped(remainder, MAX_PLAIN_ENGLISH_HEADING_WORDS)
+    ):
+        return no, _strip_toc_tail(remainder)
+    return None
 
 
 def _match_unnumbered_heading(line: str) -> str | None:
@@ -177,8 +207,9 @@ class _SectionTree:
     """Consumes a document's lines in order and emits one Chunk per
     non-empty section, correctly nested by heading level."""
 
-    def __init__(self, doc_id: str):
+    def __init__(self, doc_id: str, allow_plain_english: bool = False):
         self.doc_id = doc_id
+        self._allow_plain_english = allow_plain_english
         self._stack: list[_OpenSection] = []
         self._chunks: list[Chunk] = []
 
@@ -188,7 +219,7 @@ class _SectionTree:
         if not line:
             return
 
-        numbered = _match_numbered_heading(line)
+        numbered = _match_numbered_heading(line, self._allow_plain_english)
         if numbered:
             section_no, heading = numbered
             self._open(_section_level(section_no), heading, section_no, page_num)
@@ -289,8 +320,9 @@ def chunk_document(
     min_tokens: int = 0,
 ) -> list[Chunk]:
     pages = _strip_boilerplate(pages)
+    allow_plain_english = not _document_uses_dotted_numbering(pages)
 
-    tree = _SectionTree(doc_id)
+    tree = _SectionTree(doc_id, allow_plain_english=allow_plain_english)
     for page_num, text in pages:
         if _is_toc_page(text):
             continue
@@ -365,10 +397,19 @@ def token_histogram(chunks: list[Chunk]) -> dict[str, int]:
 
 def load_body_pages(path: Path) -> list[tuple[int, str]]:
     """Convenience loader: page number (1-indexed) + text for every page
-    after the cover sheet (page 1)."""
+    after the cover sheet (page 1). For NHS/UK-government employer policy
+    PDFs, which always have one."""
     with pdfplumber.open(path) as pdf:
         return [
             (i, page.extract_text() or "")
             for i, page in enumerate(pdf.pages, start=1)
             if i > 1
+        ]
+
+
+def load_all_pages(path: Path) -> list[tuple[int, str]]:
+    """No cover-sheet skip — for GOV.UK statutory PDFs, which have none."""
+    with pdfplumber.open(path) as pdf:
+        return [
+            (i, page.extract_text() or "") for i, page in enumerate(pdf.pages, start=1)
         ]

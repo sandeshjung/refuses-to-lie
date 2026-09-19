@@ -1,8 +1,14 @@
 from pathlib import Path
 
-from refuses_to_lie.corpus import chunk_document, load_body_pages, token_histogram
+from refuses_to_lie.corpus import (
+    chunk_document,
+    load_all_pages,
+    load_body_pages,
+    token_histogram,
+)
 
 CORPUS = Path(__file__).resolve().parent.parent / "corpus" / "employer"
+STATUTORY_CORPUS = Path(__file__).resolve().parent.parent / "corpus" / "statutory"
 
 
 def _chunks(doc_id: str, filename: str):
@@ -83,6 +89,41 @@ def test_b1_1_and_b11_same_content_different_section_numbers():
         assert chunk.text.startswith(
             "1. The management of performance is a continuous process"
         )
+        assert chunk.token_count > 0
+
+
+def test_ssp_statutory_pdf_plain_english_headings():
+    # GOV.UK statutory PDFs have no cover sheet and use plain-English
+    # numbered headings ("1. Overview", "2. What you'll get") rather than
+    # NHS-style Title Case / ALL CAPS ("1. Introduction"). Regression test
+    # for a bug where "2. What you'll get" failed the Title-Case-only
+    # heading-shape check and was silently absorbed into section 1's body.
+    pages = load_all_pages(STATUTORY_CORPUS / "Print Statutory Sick Pay (SSP) - GOV.UK.pdf")
+    chunks = chunk_document("SSP", pages)
+
+    by_section = {c.section_no: c for c in chunks if c.section_no is not None}
+    assert set(by_section) == {"1", "2", "3", "4"}
+
+    assert by_section["1"].heading_trail == ("Overview",)
+    assert by_section["1"].text.startswith(
+        "You can get up to £123.25 per week Statutory Sick Pay (SSP)"
+    )
+    assert "2. What you'll get" not in by_section["1"].text
+
+    assert by_section["2"].heading_trail == ("What you'll get",)
+    assert by_section["2"].text.startswith(
+        "If you’re eligible, you can get £123.25 a week Statutory Sick Pay"
+    )
+
+    assert by_section["3"].heading_trail == ("Eligibility",)
+    assert by_section["3"].text.startswith("To qualify for Statutory Sick Pay (SSP) you must:")
+
+    assert by_section["4"].heading_trail == ("How to claim",)
+    assert by_section["4"].text.startswith(
+        "To claim Statutory Sick Pay (SSP), tell your employer by the deadline"
+    )
+
+    for chunk in by_section.values():
         assert chunk.token_count > 0
 
 
