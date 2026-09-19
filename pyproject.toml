@@ -7,7 +7,11 @@ authors = [
     { name = "Sandesh Jung Kunwar", email = "sandeshjung@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "bs4>=0.0.2",
+    "pdfplumber>=0.11.10",
+    "requests>=2.34.2",
+]
 
 [project.scripts]
 refuses-to-lie = "refuses_to_lie:main"
