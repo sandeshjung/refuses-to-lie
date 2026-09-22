@@ -14,6 +14,7 @@ import json
 import os
 import random
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import requests
@@ -73,6 +74,23 @@ def _write_cache(cache_dir: Path, key: str, text: str) -> None:
     _cache_path(cache_dir, key).write_text(json.dumps({"text": text}))
 
 
+def _cached_call(send: Callable[[], str], cache_key: str | None, cache_dir: Path) -> str:
+    """Read-through cache around a provider call, with backoff on the miss.
+
+    Every provider shares this so the resumability policy lives in exactly
+    one place: a cache hit never reaches the network, and a result is
+    written the moment it arrives rather than at the end of a batch.
+    """
+    if cache_key is not None:
+        cached = _read_cache(cache_dir, cache_key)
+        if cached is not None:
+            return cached
+    text = with_backoff(send)
+    if cache_key is not None:
+        _write_cache(cache_dir, cache_key, text)
+    return text
+
+
 def call_gemini(
     prompt: str,
     model: str,
@@ -80,12 +98,7 @@ def call_gemini(
     cache_key: str | None = None,
     cache_dir: Path = DEFAULT_CACHE_DIR,
 ) -> str:
-    if cache_key is not None:
-        cached = _read_cache(cache_dir, cache_key)
-        if cached is not None:
-            return cached
-
-    def _call() -> str:
+    def send() -> str:
         response = _get_google_client().models.generate_content(
             model=model,
             contents=prompt,
@@ -93,10 +106,7 @@ def call_gemini(
         )
         return response.text or ""
 
-    text = with_backoff(_call)
-    if cache_key is not None:
-        _write_cache(cache_dir, cache_key, text)
-    return text
+    return _cached_call(send, cache_key, cache_dir)
 
 
 def call_groq(
@@ -106,12 +116,7 @@ def call_groq(
     cache_key: str | None = None,
     cache_dir: Path = DEFAULT_CACHE_DIR,
 ) -> str:
-    if cache_key is not None:
-        cached = _read_cache(cache_dir, cache_key)
-        if cached is not None:
-            return cached
-
-    def _call() -> str:
+    def send() -> str:
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"},
@@ -126,7 +131,4 @@ def call_groq(
         result: str = response.json()["choices"][0]["message"]["content"]
         return result
 
-    text = with_backoff(_call)
-    if cache_key is not None:
-        _write_cache(cache_dir, cache_key, text)
-    return text
+    return _cached_call(send, cache_key, cache_dir)
