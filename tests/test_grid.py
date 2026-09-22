@@ -1,0 +1,111 @@
+import json
+from dataclasses import replace
+from pathlib import Path
+
+from refuses_to_lie.config import LADDER, A, B
+from refuses_to_lie.grid import (
+    cache_key,
+    config_fingerprint,
+    load_completed,
+    pending_work,
+    stratified_sample,
+)
+
+EVAL_FILE = Path(__file__).resolve().parent.parent / "eval" / "questions.json"
+
+
+def _row(config_id: str, question_id: str, fingerprint: str, error: str | None = None) -> str:
+    row = {
+        "config_id": config_id,
+        "question_id": question_id,
+        "config_fingerprint": fingerprint,
+    }
+    if error:
+        row["error"] = error
+    return json.dumps(row)
+
+
+def test_fingerprint_changes_when_a_substantive_field_changes():
+    # If this did not hold, editing a model name would silently reuse answers
+    # produced by the old one and the reported number would mix two systems.
+    assert config_fingerprint(A) != config_fingerprint(replace(A, generator_model="other"))
+    assert config_fingerprint(A) != config_fingerprint(replace(A, top_k_context=3))
+    assert config_fingerprint(A) != config_fingerprint(B)
+
+
+def test_fingerprint_ignores_cosmetic_label_changes():
+    # Rewording a human-readable label should not throw away hours of work.
+    assert config_fingerprint(A) == config_fingerprint(replace(A, label="reworded"))
+
+
+def test_cache_key_is_stable_and_config_sensitive():
+    assert cache_key(A, "AS-001") == cache_key(A, "AS-001")
+    assert cache_key(A, "AS-001") != cache_key(B, "AS-001")
+    assert cache_key(A, "AS-001") != cache_key(A, "AS-002")
+
+
+def test_completed_rows_are_skipped(tmp_path: Path):
+    path = tmp_path / "grid.jsonl"
+    fp = config_fingerprint(A)
+    path.write_text(_row("A", "AS-001", fp) + "\n")
+
+    assert load_completed(path) == {("A", "AS-001", fp)}
+
+
+def test_failed_rows_are_retried_not_treated_as_done(tmp_path: Path):
+    # A transient 429 must not become a permanent hole in the grid.
+    path = tmp_path / "grid.jsonl"
+    fp = config_fingerprint(A)
+    path.write_text(
+        _row("A", "AS-001", fp) + "\n" + _row("A", "AS-002", fp, error="APIError: 429") + "\n"
+    )
+
+    completed = load_completed(path)
+    assert ("A", "AS-001", fp) in completed
+    assert ("A", "AS-002", fp) not in completed
+
+    questions = [{"id": "AS-001", "category": "x"}, {"id": "AS-002", "category": "x"}]
+    todo = pending_work(questions, [A], completed)
+    assert [q["id"] for q, _ in todo] == ["AS-002"]
+
+
+def test_changing_the_config_invalidates_previous_rows(tmp_path: Path):
+    path = tmp_path / "grid.jsonl"
+    path.write_text(_row("A", "AS-001", config_fingerprint(A)) + "\n")
+    completed = load_completed(path)
+
+    changed = replace(A, generator_model="a-different-model")
+    questions = [{"id": "AS-001", "category": "x"}]
+
+    assert pending_work(questions, [A], completed) == []
+    assert len(pending_work(questions, [changed], completed)) == 1
+
+
+def test_missing_results_file_means_everything_is_pending(tmp_path: Path):
+    assert load_completed(tmp_path / "absent.jsonl") == set()
+
+
+def test_stratified_sample_covers_every_category():
+    # A slice used to validate the harness is only useful if it exercises
+    # abstention and injection, not just whatever a shuffle surfaced.
+    questions = json.loads(EVAL_FILE.read_text())
+    all_categories = {q["category"] for q in questions}
+
+    sample = stratified_sample(questions, 40)
+
+    assert {q["category"] for q in sample} == all_categories
+    assert len(sample) <= 40
+    assert len({q["id"] for q in sample}) == len(sample), "sample must not repeat questions"
+
+
+def test_stratified_sample_is_deterministic():
+    questions = json.loads(EVAL_FILE.read_text())
+    assert [q["id"] for q in stratified_sample(questions, 30)] == [
+        q["id"] for q in stratified_sample(questions, 30)
+    ]
+
+
+def test_pending_work_covers_the_whole_grid_when_nothing_is_done():
+    questions = [{"id": f"Q{i}", "category": "x"} for i in range(5)]
+    todo = pending_work(questions, list(LADDER), set())
+    assert len(todo) == 5 * len(LADDER)

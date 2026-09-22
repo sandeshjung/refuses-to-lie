@@ -1,0 +1,175 @@
+"""Run the eval grid: every question against every ladder config.
+
+Resumable, not restartable. Results are appended to a JSONL file one row at
+a time, and a rerun skips any (config, question) pair already present. A
+rate limit, a crash or a Ctrl-C three hours in costs you the row in flight
+and nothing else — which matters because a full grid is thousands of LLM
+calls against free-tier providers.
+
+Two layers of resumability stack here: this file skips completed rows, and
+llm_client caches individual provider responses to disk. So even a row that
+failed halfway through (say the verifier died after generation succeeded)
+replays the generation from cache rather than paying for it twice.
+
+Config changes invalidate results automatically. Each row records a
+fingerprint of the config's substantive fields, and rows whose fingerprint
+no longer matches are treated as not-done, so editing a model name or
+top_k silently reusing stale answers is not possible.
+
+Usage:
+  uv run python scripts/run_grid.py --sample 40          # stratified slice
+  uv run python scripts/run_grid.py --configs A,B        # some rungs
+  uv run python scripts/run_grid.py                      # the full grid
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from dataclasses import asdict
+from pathlib import Path
+
+from refuses_to_lie.answering import answer_question
+from refuses_to_lie.config import LADDER, RunConfig
+from refuses_to_lie.corpus import Chunk, chunk_document, load_all_pages
+from refuses_to_lie.grid import (
+    cache_key,
+    config_fingerprint,
+    load_completed,
+    pending_work,
+    stratified_sample,
+)
+from refuses_to_lie.pipeline import load_corpus_chunks
+from refuses_to_lie.rerank import Reranker, get_reranker
+from refuses_to_lie.retrieval import Index
+
+ROOT = Path(__file__).resolve().parent.parent
+EVAL_FILE = ROOT / "eval" / "questions.json"
+DEFAULT_RESULTS = ROOT / "results" / "grid.jsonl"
+
+
+def load_injected_chunks(injected_dir: Path) -> list[Chunk]:
+    """Load the adversarial corpus.
+
+    These have no cover sheet, so the filename stem is the doc_id and every
+    page is body -- which is also what makes an injected document visually
+    indistinguishable from a real one once it is chunked.
+    """
+    chunks: list[Chunk] = []
+    for pdf_path in sorted(injected_dir.glob("*.pdf")):
+        chunks.extend(chunk_document(pdf_path.stem, load_all_pages(pdf_path)))
+    return chunks
+
+
+def run_one(
+    question: dict, config: RunConfig, index: Index, reranker: Reranker | None
+) -> dict:
+    started = time.monotonic()
+    row: dict = {
+        "question_id": question["id"],
+        "category": question["category"],
+        "config_id": config.id,
+        "config_fingerprint": config_fingerprint(config),
+        "expected_answerable": question["expected_answerable"],
+    }
+    try:
+        answer = answer_question(
+            question["question"],
+            index,
+            config,
+            cache_key=cache_key(config, question["id"]),
+            reranker=reranker,
+        )
+    except Exception as exc:
+        # A failed row must not kill the grid: record it and move on, so a
+        # single malformed response does not cost hours of completed work.
+        row["error"] = f"{type(exc).__name__}: {exc}"
+        row["elapsed_s"] = round(time.monotonic() - started, 2)
+        return row
+
+    row.update(
+        {
+            "answer": answer.text,
+            "abstained": answer.abstained,
+            "retrieved_doc_ids": [h.chunk.doc_id for h in answer.hits],
+            "retrieved_chunk_ids": [h.chunk.chunk_id for h in answer.hits],
+            "citations": [
+                {"chunk_id": c.chunk_id, "cite_label": c.cite_label} for c in answer.citations
+            ],
+            "verdicts": [asdict(v) for v in answer.verdicts],
+            "confidence": (
+                {**asdict(answer.confidence), "composite": answer.confidence.composite}
+                if answer.confidence
+                else None
+            ),
+            "elapsed_s": round(time.monotonic() - started, 2),
+        }
+    )
+    return row
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--sample", type=int, default=0, help="stratified subset size")
+    parser.add_argument("--configs", default="", help="comma-separated rung ids, e.g. A,B")
+    parser.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
+    parser.add_argument(
+        "--no-injected",
+        action="store_true",
+        help="exclude the adversarial corpus (prompt_injection questions need it)",
+    )
+    args = parser.parse_args()
+
+    configs = list(LADDER)
+    if args.configs:
+        wanted = {c.strip().upper() for c in args.configs.split(",")}
+        configs = [c for c in LADDER if c.id in wanted]
+        if not configs:
+            parser.error(f"no ladder configs matched {sorted(wanted)}")
+
+    questions = json.loads(EVAL_FILE.read_text())
+    if args.sample:
+        questions = stratified_sample(questions, args.sample)
+
+    include_injected = not args.no_injected
+    chunks = load_corpus_chunks(ROOT / "corpus" / "employer", ROOT / "corpus" / "statutory")
+    if include_injected:
+        chunks += load_injected_chunks(ROOT / "corpus" / "injected")
+
+    index = Index(chunks)
+    reranker = get_reranker() if any(c.rerank for c in configs) else None
+
+    args.results.parent.mkdir(parents=True, exist_ok=True)
+    completed = load_completed(args.results)
+
+    todo = pending_work(questions, configs, completed)
+    total = len(questions) * len(configs)
+    print(
+        f"{len(chunks)} chunks (injected={'yes' if include_injected else 'no'}) | "
+        f"{len(questions)} questions x {len(configs)} configs = {total} rows\n"
+        f"{total - len(todo)} already done, {len(todo)} to run -> {args.results}\n"
+    )
+
+    failures = 0
+    with args.results.open("a") as out:
+        for i, (question, config) in enumerate(todo, start=1):
+            row = run_one(question, config, index, reranker)
+            row["corpus_includes_injected"] = include_injected
+            out.write(json.dumps(row) + "\n")
+            out.flush()  # one row at a time: a kill -9 loses nothing already written
+
+            if "error" in row:
+                failures += 1
+                print(f"[{i}/{len(todo)}] {config.id} {question['id']} FAILED {row['error']}")
+            elif i % 10 == 0 or i == len(todo):
+                print(f"[{i}/{len(todo)}] {config.id} {question['id']} ok")
+
+    print(f"\ndone: {len(todo) - failures} ok, {failures} failed")
+    if failures:
+        print("rerun the same command to retry only the failed rows", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
