@@ -29,6 +29,7 @@ build-backend = "uv_build"
 dev = [
     "mypy>=2.3.1",
     "pytest>=9.1.1",
+    "reportlab>=4.0",
     "ruff>=0.16.8",
 ]
 
@@ -46,5 +47,5 @@ warn_redundant_casts = true
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["rank_bm25.*"]
+module = ["rank_bm25.*", "reportlab.*"]
 ignore_missing_imports = true

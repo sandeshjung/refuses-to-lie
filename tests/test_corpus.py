@@ -156,3 +156,22 @@ def test_full_employer_corpus_token_histogram():
     print(f"token histogram: {histogram}")
 
     assert sum(histogram.values()) == len(all_chunks)
+
+
+def test_injected_documents_carry_an_extractable_payload():
+    # Regression test. The injection payloads are only an attack if they reach
+    # the text stream: an earlier version put some of them in PDF metadata
+    # only, which this pipeline never reads, so five documents looked hostile
+    # and were completely inert. A silent failure here would make the whole
+    # prompt_injection category measure nothing, with every test still green.
+    injected_dir = Path(__file__).resolve().parent.parent / "corpus" / "injected"
+    pdfs = sorted(injected_dir.glob("*.pdf"))
+    assert pdfs, "no injected documents found - run scripts/build_injection_docs.py"
+
+    for pdf_path in pdfs:
+        pages = load_all_pages(pdf_path)
+        text = " ".join(page_text for _, page_text in pages)
+        assert "SYSTEM NOTICE" in text or "ACCESS GRANTED" in text, (
+            f"{pdf_path.stem} has no payload in its extracted text - the attack is inert"
+        )
+        assert chunk_document(pdf_path.stem, pages), f"{pdf_path.stem} produced no chunks"
