@@ -1,0 +1,193 @@
+[
+  {
+    "id": "AS-001",
+    "category": "answerable_single",
+    "question": "What should a member of staff do immediately if they lose their ID badge?",
+    "expected_answerable": true,
+    "expected_doc_ids": ["a13-use-of-identification-badges-policy-april-26pdf"],
+    "expected_answer_summary": "Immediately inform the Identity Services team on extension 2720 so the card can be suspended and a new badge issued; the employee will be asked to pay the replacement cost.",
+    "notes": "Grounded in §9 'Loss of Badge'. Straightforward single-document lookup."
+  },
+  {
+    "id": "AS-002",
+    "category": "answerable_single",
+    "question": "Is an employee's outstanding annual leave entitlement paid out if they die while in service?",
+    "expected_answerable": true,
+    "expected_doc_ids": ["a18-death-in-service-policy-april-26pdf"],
+    "expected_answer_summary": "Yes — an allowance equivalent to the balance of annual leave entitlement on the date of death, calculated proportionately, is paid to the next of kin/executor of estate.",
+    "notes": "Grounded in §7 'Annual Leave Entitlement'."
+  },
+  {
+    "id": "AS-003",
+    "category": "answerable_single",
+    "question": "What is the maximum amount of additional annual leave an employee can apply to purchase, and in what units?",
+    "expected_answerable": true,
+    "expected_doc_ids": ["a38additionalannualleavepurchaseschemeapril26pdf"],
+    "expected_answer_summary": "Up to a maximum of two complete weeks (pro-rata, contracted hours). Individual days are not considered — applications must be for whole weeks.",
+    "notes": "Grounded in §5 'Scheme Details'."
+  },
+  {
+    "id": "AS-004",
+    "category": "answerable_single",
+    "question": "What is the minimum length of continuous service an employee needs before they can apply for a career break?",
+    "expected_answerable": true,
+    "expected_doc_ids": ["a36-employment-break-policy-april-26"],
+    "expected_answer_summary": "A minimum of 12 months continuous service with the Trust.",
+    "notes": "Grounded in §1 'Introduction'. This is the doc used throughout corpus.py's test suite, so its content is thoroughly verified already."
+  },
+  {
+    "id": "AS-005",
+    "category": "answerable_single",
+    "question": "Under what circumstances can unused annual leave be carried over into the next leave year?",
+    "expected_answerable": true,
+    "expected_doc_ids": ["UHN-PO-HR24"],
+    "expected_answer_summary": "Only where there are statutory obligations/rules to do so (e.g. sickness absence, maternity/adoption/shared parental leave), or in exceptional circumstances reviewed and approved by the Divisional Director/Director of the Service where leave could not be taken due to service demands or patient safety.",
+    "notes": "Grounded in §4.8 'Carry Over of Annual Leave'."
+  },
+  {
+    "id": "AS-006",
+    "category": "answerable_single",
+    "question": "What three basic conditions must someone meet to qualify for Statutory Sick Pay?",
+    "expected_answerable": true,
+    "expected_doc_ids": ["Print Statutory Sick Pay (SSP) - GOV.UK"],
+    "expected_answer_summary": "Be classed as an employee, have done some work for the employer, and have been ill for at least one full working day.",
+    "notes": "Grounded in §3 'Eligibility'. Uses the CURRENT (non-2025-archived) SSP page — see CS-002 for the version distinction."
+  },
+  {
+    "id": "SY-001",
+    "category": "answerable_synthesis",
+    "question": "Do the career break scheme and the additional annual leave purchase scheme require the same minimum length of service before an employee can apply?",
+    "expected_answerable": true,
+    "expected_doc_ids": ["a36-employment-break-policy-april-26", "a38additionalannualleavepurchaseschemeapril26pdf"],
+    "expected_answer_summary": "Effectively yes: the career break policy requires a minimum of 12 months continuous service, and the additional leave purchase scheme requires 'one full year's service' — the same length, stated in two different policies with different wording.",
+    "notes": "Requires reading both a36 §1 and a38 §5 and recognizing '12 months' and 'one full year' as the same requirement — the synthesis is noticing the equivalence, not just retrieving two facts."
+  },
+  {
+    "id": "SY-002",
+    "category": "answerable_synthesis",
+    "question": "Do Agenda for Change staff (under the Annual Leave policy) and junior medical staff with under 5 years' NHS service (under the Medical Leave policy) start on the same basic annual leave entitlement?",
+    "expected_answerable": true,
+    "expected_doc_ids": ["UHN-PO-HR24", "a39-medical-leave-policy-april-26pdf"],
+    "expected_answer_summary": "Yes — both start at 27 days a year (UHN-PO-HR24 states 202.5 hours / 27 days plus 8 public holidays on appointment for full-time AfC staff; a39 states 27 days/year for FY1/FY2 and CT1/CT2/ST1/ST2/Trust Grade SHO with under 5 years' NHS service).",
+    "notes": "Requires cross-document numeric comparison (27 days appears in both, phrased differently — hours-based in one, days-based in the other)."
+  },
+  {
+    "id": "NM-001",
+    "category": "near_miss",
+    "question": "How much does it cost to replace a lost ID badge?",
+    "expected_answerable": false,
+    "expected_doc_ids": [],
+    "expected_answer_summary": null,
+    "notes": "Near miss: the topic (lost badge replacement) is directly covered in a13 §9, which says the employee 'will be requested to pay the cost of replacing the badge' — but no figure or amount is ever stated anywhere in that document or elsewhere in the corpus. Verified via scripts/check_uniqueness.py: top 8 hybrid hits are all a13, none state a cost."
+  },
+  {
+    "id": "NM-002",
+    "category": "near_miss",
+    "question": "What is the exact number of days of annual leave a part-time career-break returner can carry over?",
+    "expected_answerable": false,
+    "expected_doc_ids": [],
+    "expected_answer_summary": null,
+    "notes": "Near miss: a36 §6 states there is NO annual leave entitlement while ON a career break (different question), and separately covers part-time-adjacent leave rules elsewhere, but the specific combination asked here — a part-time employee's carry-over allowance specifically upon RETURNING from a career break — is never stated as a number anywhere. Verified via check_uniqueness.py: top hits are a mix of a36 and a39, none give this specific figure. Flagging this one as the hardest near-miss in this batch since it requires noticing an absence across a combination of conditions, not a single missing fact — worth double-checking by hand before trusting it in a report."
+  },
+  {
+    "id": "NM-003",
+    "category": "near_miss",
+    "question": "What percentage attendance level is required to qualify for the additional annual leave purchase scheme?",
+    "expected_answerable": false,
+    "expected_doc_ids": [],
+    "expected_answer_summary": null,
+    "notes": "Near miss: a38 §5 states employees should 'ideally have a minimum attendance level ... of 96%', explicitly qualified as 'subject to the line manager's discretion' — i.e. not a hard requirement. A system that answers '96%' as if it were a strict eligibility rule is wrong; the honest answer is that no strict percentage is mandated. Verified via check_uniqueness.py: all top hits are a38, confirming the 96% figure is the only number present and it's explicitly discretionary."
+  },
+  {
+    "id": "NM-004",
+    "category": "near_miss",
+    "question": "How many days after an employee's death does the Trust guarantee the final pension payment will be issued?",
+    "expected_answerable": false,
+    "expected_doc_ids": [],
+    "expected_answer_summary": null,
+    "notes": "Near miss: a18 §8 covers final pension/salary arrangements in detail (who is contacted, priority handling, process order) but never states a day-count or turnaround-time guarantee — it only says paperwork 'shall be treated as priority'. Verified via check_uniqueness.py: top hits confined to a18, no timeframe figure present."
+  },
+  {
+    "id": "OS-001",
+    "category": "out_of_scope",
+    "question": "What is the process for requesting a company car allowance?",
+    "expected_answerable": false,
+    "expected_doc_ids": [],
+    "expected_answer_summary": null,
+    "notes": "Out of scope: no document in the corpus covers company cars or car allowances. Verified via check_uniqueness.py: top hits are low-relevance scattered matches on unrelated 'allowance'/'travel by car' mentions (a39 mileage rate, a16 secondment allowances) — none address a company car scheme."
+  },
+  {
+    "id": "OS-002",
+    "category": "out_of_scope",
+    "question": "What sporting or gym facilities are available to staff on-site?",
+    "expected_answerable": false,
+    "expected_doc_ids": [],
+    "expected_answer_summary": null,
+    "notes": "Out of scope: no document mentions on-site sporting/gym facilities. Verified via check_uniqueness.py: top hits are unrelated (on-call travel distance, pre-retirement training, wellbeing support services) — nothing about gym facilities."
+  },
+  {
+    "id": "OS-003",
+    "category": "out_of_scope",
+    "question": "What is the process for international relocation assistance for new hires?",
+    "expected_answerable": false,
+    "expected_doc_ids": [],
+    "expected_answer_summary": null,
+    "notes": "Out of scope: no relocation-assistance policy exists in the corpus. Verified via check_uniqueness.py: top hits are recruitment/organisational-change content with no mention of relocation or international hiring support."
+  },
+  {
+    "id": "OS-004",
+    "category": "out_of_scope",
+    "question": "How much annual bonus is paid to senior executives?",
+    "expected_answerable": false,
+    "expected_doc_ids": [],
+    "expected_answer_summary": null,
+    "notes": "Out of scope: no bonus/executive-pay document exists in the corpus. Verified via check_uniqueness.py: top hits are scattered annual-leave and NI-rate content with no bonus figures."
+  },
+  {
+    "id": "FP-001",
+    "category": "false_premise",
+    "question": "Why does the ID badge policy allow staff to keep their badge as a souvenir after they leave the Trust?",
+    "expected_answerable": false,
+    "expected_doc_ids": ["a13-use-of-identification-badges-policy-april-26pdf"],
+    "expected_answer_summary": null,
+    "notes": "False premise: a13 §8 requires the opposite — on leaving, staff must hand the badge to their line manager, who securely destroys it and notifies Identity Services to remove system access. A correct answer should reject the premise, not explain a policy of letting staff keep badges."
+  },
+  {
+    "id": "FP-002",
+    "category": "false_premise",
+    "question": "Why does the career break policy guarantee full annual leave accrual while staff are on a break?",
+    "expected_answerable": false,
+    "expected_doc_ids": ["a36-employment-break-policy-april-26"],
+    "expected_answer_summary": null,
+    "notes": "False premise: a36 §6 states explicitly there is NO entitlement to annual leave (or occupational sick pay or other discretionary entitlements) while on a career break. The premise is the exact opposite of the documented policy."
+  },
+  {
+    "id": "FP-003",
+    "category": "false_premise",
+    "question": "Why is the 96% attendance requirement for the additional leave purchase scheme a strict, non-negotiable threshold?",
+    "expected_answerable": false,
+    "expected_doc_ids": ["a38additionalannualleavepurchaseschemeapril26pdf"],
+    "expected_answer_summary": null,
+    "notes": "False premise: a38 §5 explicitly says the 96% figure is an 'ideal' minimum 'subject to the line manager's discretion' — the opposite of a strict, non-negotiable rule. Related to NM-003 (same source fact, different failure mode being tested: here the question asserts something false about the rule's nature, rather than asking for a missing number)."
+  },
+  {
+    "id": "CS-001",
+    "category": "contradictory_stale",
+    "question": "According to the Maintaining High Professional Standards policy, what section number covers 'Part I: Action When a Concern Arises'?",
+    "expected_answerable": true,
+    "expected_doc_ids": ["UHN-PO-HR26"],
+    "distractor_doc_ids": ["B1.1"],
+    "expected_answer_summary": "Section 4.1, per the current policy (UHN-PO-HR26, effective May 2027). The superseded prior version (B1.1, filename marked SUPERSEDED) numbers the identical content as section 10.1 — a system that answers '10.1' is citing the stale document.",
+    "notes": "B1.1 and UHN-PO-HR26 are the same policy lineage, old vs current (this exact pair is already used in tests/test_corpus.py to prove section numbering isn't hardcoded). B1.1's own filename is marked SUPERSEDED, and UHN-PO-HR26's own cover-sheet Supersedes field explicitly names 'Policy B.1.1 – KGH' (verified via intake.py's parse_cover_sheet, not just the filename) — so the stale/current relationship is grounded in document metadata both ways, not assumed. A correct system should ground its answer in the current document and, ideally, note the earlier document exists and disagrees, rather than silently averaging or picking whichever ranks higher in retrieval."
+  },
+  {
+    "id": "CS-002",
+    "category": "contradictory_stale",
+    "question": "What is the current weekly rate of Statutory Sick Pay?",
+    "expected_answerable": true,
+    "expected_doc_ids": ["Print Statutory Sick Pay (SSP) - GOV.UK"],
+    "distractor_doc_ids": ["Print Statutory Sick Pay (SSP) 2025 - GOV.UK"],
+    "expected_answer_summary": "£123.25 a week (or 80% of average weekly earnings if lower), per the current GOV.UK page. The 2025 Wayback Machine snapshot of the same page states £116.75 (an older rate) with slightly different wording (no '80% of earnings' clause) — a system that answers with the older figure is citing a stale archived snapshot rather than the current source.",
+    "notes": "Both PDFs are literally the same GOV.UK page: 'Print Statutory Sick Pay (SSP) - GOV.UK.pdf' is the current page (timestamped 2026, no archive banner); 'Print Statutory Sick Pay (SSP) 2025 - GOV.UK.pdf' carries a visible 'The Wayback Machine' banner and is an archived January 2025 snapshot. Confirmed by reading both §2 chunks directly: £123.25 vs £116.75. Also confirmed the non-'2025' Maternity/Paternity/Shared-Parental-Leave pages are genuinely current (no Wayback banner, 2026 timestamp) — the same current-vs-archived pattern likely holds across all four GOV.UK topic pairs, not just SSP, which is worth exploiting for more contradictory_stale questions in a later batch."
+  }
+]
