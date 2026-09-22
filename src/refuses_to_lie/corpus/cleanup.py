@@ -12,6 +12,15 @@ from collections import Counter
 _TOC_HEADER_LINES = {"table of contents", "contents"}
 _PAGE_NUM_RE = re.compile(r"^\d{1,4}$")
 _URL_PAGE_FOOTER_RE = re.compile(r"^https?://\S+\s+\d+/\d+$")
+_TRAILING_PAGE_NUM_RE = re.compile(r"\s+\d{1,4}$")
+
+
+def _normalize_for_boilerplate(line: str) -> str:
+    """Strip a trailing page number so a footer like 'Doc Title V1 4' on one
+    page and 'Doc Title V1 5' on the next are recognized as the same
+    repeated line, not a different one each time (some documents glue the
+    page number onto the same line as the rest of the footer text)."""
+    return _TRAILING_PAGE_NUM_RE.sub("", line)
 
 
 def strip_boilerplate(pages: list[tuple[int, str]]) -> list[tuple[int, str]]:
@@ -22,7 +31,7 @@ def strip_boilerplate(pages: list[tuple[int, str]]) -> list[tuple[int, str]]:
         for line in text.split("\n"):
             s = line.strip()
             if s:
-                counts[s] += 1
+                counts[_normalize_for_boilerplate(s)] += 1
     threshold = max(2, len(pages) // 2)
     boilerplate = {line for line, c in counts.items() if c >= threshold}
 
@@ -39,7 +48,9 @@ def _is_noise_line(line: str, boilerplate: set[str]) -> bool:
     if not line:
         return False
     return bool(
-        line in boilerplate or _PAGE_NUM_RE.match(line) or _URL_PAGE_FOOTER_RE.match(line)
+        _normalize_for_boilerplate(line) in boilerplate
+        or _PAGE_NUM_RE.match(line)
+        or _URL_PAGE_FOOTER_RE.match(line)
     )
 
 

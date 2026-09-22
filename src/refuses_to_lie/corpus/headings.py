@@ -55,6 +55,14 @@ def is_heading_shaped(remainder: str, max_words: int) -> bool:
             continue
         if core.lower() in _STOPWORDS:
             continue
+        if core.isdigit():
+            # A bare number ("1", "2") carries no case at all, so it can't
+            # fail or pass the capitalization test on its own merits — skip
+            # it, same as a stopword. Real headings like "Class 1 National
+            # Insurance thresholds" contain these; rejecting the whole line
+            # over one digit token was silently dropping every heading with
+            # a number in its title, not just numbered-list prefixes.
+            continue
         if not (core[0].isupper() or core.isupper()):
             return False
     return True

@@ -88,6 +88,24 @@ def test_b1_1_and_b11_same_content_different_section_numbers():
         assert chunk.token_count > 0
 
 
+def test_ni_rates_document_produces_headings_with_digit_tokens():
+    # Regression test: is_heading_shaped rejected any heading containing a
+    # bare digit token (e.g. "1" in "Class 1 National Insurance
+    # thresholds"), because a pure-digit word satisfies neither
+    # core[0].isupper() nor core.isupper(). This silently dropped every
+    # real heading in this document, producing zero chunks.
+    pages = load_all_pages(
+        STATUTORY_CORPUS
+        / "Rates and allowances_ National Insurance contributions - GOV.UK.pdf"
+    )
+    chunks = chunk_document("NI-rates", pages)
+
+    assert chunks
+    class_2_and_4 = next(c for c in chunks if c.section_no == "3")
+    assert class_2_and_4.heading_trail == ("Class 2 and Class 4 National",)
+    assert "National Insurance" in class_2_and_4.text
+
+
 def test_ssp_statutory_pdf_plain_english_headings():
     # GOV.UK statutory PDFs have no cover sheet and use plain-English
     # numbered headings ("1. Overview", "2. What you'll get") rather than
