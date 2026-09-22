@@ -1,17 +1,17 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
-from dataclasses import replace
 
 Retrieval = Literal["dense", "hybrid"]
 VerifierAction = Literal["off", "annotate", "drop_unsupported"]
 
-@dataclass(frozen=True)     # frozen=True makes instances immutable
+
+@dataclass(frozen=True)
 class RunConfig:
     id: str
     label: str
 
     # Ladder axis
-    retrieval: str = "dense"
+    retrieval: Retrieval = "dense"
     rerank: bool = False
     require_citations: bool = False
     verifier: VerifierAction = "off"
@@ -27,6 +27,7 @@ class RunConfig:
     agreement_samples: int = 3
     generator_model: str = ""
     verifier_model: str = ""
+
 
 A = RunConfig(id="A", label="dense retrieval only, no abstention")
 B = replace(A, id="B", label="+ hybrid retrieval (BM25 + dense, RRF)", retrieval="hybrid")

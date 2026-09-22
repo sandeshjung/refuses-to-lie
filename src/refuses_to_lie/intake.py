@@ -1,3 +1,7 @@
+"""Extract structured metadata from the cover sheet of a policy PDF (page 1
+only — the body is handled by the corpus package).
+"""
+
 from __future__ import annotations
 
 import re
@@ -20,8 +24,7 @@ _REQUIRED_FIELDS = (
 _STATUS_WORDS = {"expired", "superseded", "archived", "withdrawn", "retired"}
 
 _MONTHS = (
-    "january|february|march|april|may|june|july|august|september|"
-    "october|november|december"
+    "january|february|march|april|may|june|july|august|september|october|november|december"
 )
 _DATE_RE = re.compile(
     rf"^\d{{1,2}}(?:st|nd|rd|th)?\s+(?:{_MONTHS})\s+\d{{4}}$"
@@ -31,10 +34,12 @@ _DATE_RE = re.compile(
 )
 _NEW_ENTRY_PREFIX_RE = re.compile(r"^[A-Z]{2,6}\s*[-–—]")
 _HEADER_FRAGMENT_RE = re.compile(r"^[A-Z][a-z]+$")
-_DOC_REF_NUMBER_RE = re.compile(
-    r"Document Reference Number\s*[:\-–—]?\s*([^\n]+)"
-)
+_DOC_REF_NUMBER_RE = re.compile(r"Document Reference Number\s*[:\-–—]?\s*([^\n]+)")
 
+# Cover-sheet label text (normalized, lowercase) that can appear immediately
+# after a blank "Document Reference Number" field in the raw text stream.
+# Used to detect the "field left blank in the source PDF" case so we don't
+# mistake the next label for a reference-code value.
 _KNOWN_LABEL_TEXT = {
     "policy/guideline",
     "policy/guideline title",
@@ -57,15 +62,6 @@ _KNOWN_LABEL_TEXT = {
 }
 
 
-def _looks_like_label(value_norm_lower: str) -> bool:
-    if _classify_label(value_norm_lower) is not None:
-        return True
-    return any(
-        value_norm_lower == label or label.startswith(value_norm_lower)
-        for label in _KNOWN_LABEL_TEXT
-    )
-
-
 @dataclass
 class Supersession:
     name: str
@@ -85,6 +81,12 @@ class CoverSheet:
     author: str | None = None
     supersedes: list[Supersession] = field(default_factory=list)
     fields_not_found: list[str] = field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# Label classification: is a table cell a field label ("Approval Date:"),
+# and if so which CoverSheet field does it belong to?
+# --------------------------------------------------------------------------
 
 
 def _normalize(text: str) -> str:
@@ -113,6 +115,15 @@ def _classify_label(norm_lower: str) -> str | None:
     return None
 
 
+def _looks_like_label(value_norm_lower: str) -> bool:
+    if _classify_label(value_norm_lower) is not None:
+        return True
+    return any(
+        value_norm_lower == label or label.startswith(value_norm_lower)
+        for label in _KNOWN_LABEL_TEXT
+    )
+
+
 def _is_boundary(normalized: str) -> bool:
     if normalized.endswith(":"):
         return True
@@ -129,6 +140,11 @@ def _is_duplicate(normalized_lower: str, last_accepted: str | None) -> bool:
     return last_accepted.startswith(normalized_lower) or normalized_lower.startswith(
         last_accepted
     )
+
+
+# --------------------------------------------------------------------------
+# Field-specific parsing.
+# --------------------------------------------------------------------------
 
 
 def _parse_supersedes(segments: list[str]) -> list[Supersession]:
@@ -149,9 +165,7 @@ def _parse_supersedes(segments: list[str]) -> list[Supersession]:
                 current.date = line
             continue
         no_lowercase = not any(c.islower() for c in line)
-        starts_new = i == 0 or (
-            not no_lowercase and _NEW_ENTRY_PREFIX_RE.match(line)
-        )
+        starts_new = i == 0 or (not no_lowercase and _NEW_ENTRY_PREFIX_RE.match(line))
         if starts_new or current is None:
             current = Supersession(name=line)
             entries.append(current)
@@ -167,9 +181,17 @@ def _extract_standalone_doc_ref(page_text: str) -> str | None:
     value = match.group(1).strip()
     if not value:
         return None
+    # A blank "Document Reference Number" field means the next line in the
+    # text stream is actually the following cover-sheet label (e.g.
+    # "Policy/Guideline"), not a reference code — don't capture it as a value.
     if _looks_like_label(_normalize(value).lower()):
         return None
     return value
+
+
+# --------------------------------------------------------------------------
+# Entry point.
+# --------------------------------------------------------------------------
 
 
 def parse_cover_sheet(path: Path) -> CoverSheet:
@@ -228,9 +250,7 @@ def parse_cover_sheet(path: Path) -> CoverSheet:
     if not sheet.doc_ref:
         sheet.doc_ref = _extract_standalone_doc_ref(page_text)
 
-    sheet.fields_not_found = [
-        name for name in _REQUIRED_FIELDS if not getattr(sheet, name)
-    ]
+    sheet.fields_not_found = [name for name in _REQUIRED_FIELDS if not getattr(sheet, name)]
     if not sheet.supersedes:
         sheet.fields_not_found.append("supersedes")
 

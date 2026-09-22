@@ -5,6 +5,7 @@ reciprocal rank fusion (RRF) for hybrid search.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 import numpy as np
 from rank_bm25 import BM25Okapi
@@ -21,12 +22,10 @@ def _tokenize(text: str) -> list[str]:
     return _TOKEN_RE.findall(text.lower())
 
 
+@dataclass(slots=True)
 class Hit:
-    __slots__ = ("chunk", "score")
-
-    def __init__(self, chunk: Chunk, score: float):
-        self.chunk = chunk
-        self.score = score
+    chunk: Chunk
+    score: float
 
     def __repr__(self) -> str:
         return f"Hit(chunk_id={self.chunk.chunk_id!r}, score={self.score:.4f})"

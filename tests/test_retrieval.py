@@ -16,9 +16,7 @@ def index() -> Index:
     )
     chunks += chunk_document(
         "UHN-PO-HR24",
-        load_body_pages(
-            CORPUS / "uhn-annual-leave-for-agenda-for-change-staff000100pdf.pdf"
-        ),
+        load_body_pages(CORPUS / "uhn-annual-leave-for-agenda-for-change-staff000100pdf.pdf"),
     )
     return Index(chunks)
 

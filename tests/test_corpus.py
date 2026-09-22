@@ -62,12 +62,8 @@ def test_b1_1_and_b11_same_content_different_section_numbers():
         "UHN-PO-HR26", "b11-maintaining-high-professional-standards-may-2027.pdf"
     )
 
-    b1_1_part_i = next(
-        c for c in b1_1_chunks if c.heading_trail[-1].startswith("PART I:")
-    )
-    b11_part_i = next(
-        c for c in b11_chunks if c.heading_trail[-1].startswith("PART I:")
-    )
+    b1_1_part_i = next(c for c in b1_1_chunks if c.heading_trail[-1].startswith("PART I:"))
+    b11_part_i = next(c for c in b11_chunks if c.heading_trail[-1].startswith("PART I:"))
 
     assert b1_1_part_i.section_no == "10.1"
     assert b11_part_i.section_no == "4.1"

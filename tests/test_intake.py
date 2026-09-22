@@ -35,10 +35,7 @@ def test_uhn_annual_leave_policy():
     assert cs.review_date == "December 2026"
     assert cs.expiry_date == "March 2027"
     assert cs.issued_by == "Paula Kirkpatrick, Chief People Officer"
-    assert (
-        cs.author
-        == "Sarah Kinsella, HR Business Partner – Governance and Compliance"
-    )
+    assert cs.author == "Sarah Kinsella, HR Business Partner – Governance and Compliance"
     assert cs.supersedes == [
         Supersession(
             name="NGH – Annual Leave and General Public Holiday Entitlements NGH-PO-562",
@@ -94,18 +91,14 @@ def test_uhn_flexible_retirement_policy_blank_doc_ref():
     # text stream runs straight into the next label ("Policy/Guideline").
     # Regression test for a bug where that next label's text was captured
     # as if it were the doc ref value.
-    cs = parse_cover_sheet(
-        CORPUS / "uhn-flexible-retirement-policy-mos-20112023pdf.pdf"
-    )
+    cs = parse_cover_sheet(CORPUS / "uhn-flexible-retirement-policy-mos-20112023pdf.pdf")
 
     assert cs.doc_ref is None
     assert "doc_ref" in cs.fields_not_found
 
 
 def test_b11_maintaining_high_professional_standards_current():
-    cs = parse_cover_sheet(
-        CORPUS / "b11-maintaining-high-professional-standards-may-2027.pdf"
-    )
+    cs = parse_cover_sheet(CORPUS / "b11-maintaining-high-professional-standards-may-2027.pdf")
 
     assert cs.doc_ref == "UHN-PO-HR26"
     assert cs.title == (
