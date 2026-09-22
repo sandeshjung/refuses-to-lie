@@ -20,7 +20,7 @@ from refuses_to_lie.retrieval import Hit
 
 _CITATION_RE = re.compile(r"\[([\w.\-]+-\d{4})\]")
 
-_ABSTAIN_PHRASE = "I don't have enough information in the provided documents to answer this."
+ABSTAIN_PHRASE = "I don't have enough information in the provided documents to answer this."
 
 _PROMPT_WITH_CITATIONS = """You are answering a question using ONLY the excerpts below, \
 taken from policy documents. Do not use outside knowledge.
@@ -69,7 +69,7 @@ class GeneratedAnswer:
 
     @property
     def abstained(self) -> bool:
-        return self.text.strip() == _ABSTAIN_PHRASE
+        return self.text.strip() == ABSTAIN_PHRASE
 
 
 def _format_excerpts(hits: list[Hit]) -> str:
@@ -103,13 +103,13 @@ def generate_answer(
     if config.require_citations:
         prompt = _PROMPT_WITH_CITATIONS.format(
             example_id=hits[0].chunk.chunk_id,
-            abstain_phrase=_ABSTAIN_PHRASE,
+            abstain_phrase=ABSTAIN_PHRASE,
             excerpts=excerpts,
             question=question,
         )
     else:
         prompt = _PROMPT_WITHOUT_CITATIONS.format(
-            abstain_phrase=_ABSTAIN_PHRASE,
+            abstain_phrase=ABSTAIN_PHRASE,
             excerpts=excerpts,
             question=question,
         )

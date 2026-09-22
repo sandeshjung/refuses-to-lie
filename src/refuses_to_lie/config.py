@@ -25,6 +25,10 @@ class RunConfig:
     rrf_k: int = 60
     temperature: float = 0.2
     agreement_samples: int = 3
+    # Only consulted when abstain=True. Uncalibrated: picking a threshold
+    # that corresponds to a real error rate is a separate step that needs
+    # the eval grid to have been run first.
+    abstain_threshold: float = 0.5
     generator_model: str = "gemini-3.6-flash"
     verifier_model: str = "openai/gpt-oss-120b"
 

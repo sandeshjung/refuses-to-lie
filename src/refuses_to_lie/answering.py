@@ -1,0 +1,151 @@
+"""The whole system in one readable pass: question in, Answer out.
+
+Every other module here does one job well — retrieval ranks chunks,
+generation writes text, verifier checks citations, confidence scores
+them — but until now nothing showed how they fit together, so reading any
+one of them told you very little about what actually happens to a
+question. This module is that missing seam.
+
+It is also the only place that reads the RunConfig ladder axes. Each rung
+turns on one more stage:
+
+    A  dense retrieval, answer, done
+    B  hybrid retrieval (BM25 + dense via RRF)
+    C  + reranking
+    D  + mandatory inline citations
+    E  + groundedness verification, dropping unsupported claims
+    F  + calibrated abstention on the composite confidence signal
+
+Because the rungs are cumulative, a config is a set of flags rather than a
+branch, and adding a rung means adding a stage here rather than forking
+the pipeline.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from refuses_to_lie.confidence import (
+    AgreementResult,
+    ConfidenceSignal,
+    compute_confidence,
+    sample_agreement,
+    should_abstain,
+)
+from refuses_to_lie.config import RunConfig
+from refuses_to_lie.generation import (
+    ABSTAIN_PHRASE,
+    Citation,
+    GeneratedAnswer,
+    generate_answer,
+)
+from refuses_to_lie.retrieval import Hit, Index
+from refuses_to_lie.verifier import (
+    ClaimVerdict,
+    VerifiedAnswer,
+    drop_unsupported_claims,
+    verify_answer,
+)
+
+
+@dataclass
+class Answer:
+    """What one config produced for one question, with the intermediate
+    signals kept so the eval harness can score *why* an answer looked the
+    way it did, not just what it said."""
+
+    question: str
+    config_id: str
+    text: str
+    hits: list[Hit]
+    citations: list[Citation]
+    verdicts: list[ClaimVerdict]
+    confidence: ConfidenceSignal | None
+    abstained: bool
+
+    @property
+    def cited_labels(self) -> list[str]:
+        return [c.cite_label for c in self.citations]
+
+
+def retrieve_context(index: Index, question: str, config: RunConfig) -> list[Hit]:
+    """Rungs A-C: pick the ranker, retrieve wide, then narrow to the
+    excerpts that actually go in the prompt.
+
+    Retrieving top_k_retrieve and keeping only top_k_context is deliberate:
+    the confidence signal reads the score spread across the wider set, so
+    narrowing too early would throw away the very distribution that tells
+    us whether the top hit stood out.
+    """
+    if config.rerank:
+        raise NotImplementedError(
+            "config.rerank is not implemented yet, so rung C would silently behave "
+            "exactly like rung B and the ablation would report a real difference of "
+            "zero as if it were a measurement. Build the reranker before running C."
+        )
+
+    if config.retrieval == "hybrid":
+        hits = index.search_hybrid(question, k=config.top_k_retrieve, rrf_k=config.rrf_k)
+    else:
+        hits = index.search_dense(question, k=config.top_k_retrieve)
+    return hits[: config.top_k_context]
+
+
+def _draft_answer(
+    question: str, hits: list[Hit], config: RunConfig, cache_key: str | None
+) -> tuple[GeneratedAnswer, AgreementResult | None]:
+    """Rung F needs several samples to measure agreement; every other rung
+    needs one. Reuse the first sample as the answer rather than paying for
+    an extra generation that would say the same thing."""
+    if not config.abstain:
+        return generate_answer(question, hits, config, cache_key=cache_key), None
+
+    agreement = sample_agreement(question, hits, config, cache_key_prefix=cache_key)
+    return agreement.samples[0], agreement
+
+
+def answer_question(
+    question: str,
+    index: Index,
+    config: RunConfig,
+    cache_key: str | None = None,
+) -> Answer:
+    if config.abstain and config.verifier == "off":
+        raise ValueError(
+            "abstain=True needs a verifier: groundedness is one of the three inputs "
+            "to the confidence signal, and without it the score is not comparable "
+            "to a threshold calibrated with it."
+        )
+
+    hits = retrieve_context(index, question, config)
+    draft, agreement = _draft_answer(question, hits, config, cache_key)
+
+    verified: VerifiedAnswer | None = None
+    if config.verifier != "off":
+        verified = verify_answer(draft, hits, config, cache_key_prefix=cache_key)
+
+    text = draft.text
+    if verified is not None and config.verifier == "drop_unsupported":
+        text = drop_unsupported_claims(verified)
+
+    abstained = draft.abstained
+    confidence: ConfidenceSignal | None = None
+    if config.abstain:
+        # Both are non-None here: agreement comes from _draft_answer whenever
+        # abstain is set, and verified from the guard at the top of this function.
+        assert agreement is not None and verified is not None
+        confidence = compute_confidence(hits, verified, agreement)
+        if should_abstain(confidence, config.abstain_threshold):
+            abstained = True
+            text = ABSTAIN_PHRASE
+
+    return Answer(
+        question=question,
+        config_id=config.id,
+        text=text,
+        hits=hits,
+        citations=draft.citations,
+        verdicts=verified.claim_verdicts if verified else [],
+        confidence=confidence,
+        abstained=abstained,
+    )
