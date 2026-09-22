@@ -25,8 +25,8 @@ class RunConfig:
     rrf_k: int = 60
     temperature: float = 0.2
     agreement_samples: int = 3
-    generator_model: str = ""
-    verifier_model: str = ""
+    generator_model: str = "gemini-3.6-flash"
+    verifier_model: str = "openai/gpt-oss-120b"
 
 
 A = RunConfig(id="A", label="dense retrieval only, no abstention")
