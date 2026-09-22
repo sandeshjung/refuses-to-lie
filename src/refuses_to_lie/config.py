@@ -31,6 +31,7 @@ class RunConfig:
     abstain_threshold: float = 0.5
     generator_model: str = "gemini-3.6-flash"
     verifier_model: str = "openai/gpt-oss-120b"
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
 A = RunConfig(id="A", label="dense retrieval only, no abstention")

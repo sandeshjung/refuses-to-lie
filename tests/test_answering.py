@@ -37,13 +37,21 @@ def test_context_is_narrowed_to_top_k_context(index: Index):
     assert A.top_k_context < A.top_k_retrieve
 
 
-def test_rerank_rung_refuses_to_run_until_it_is_built(index: Index):
-    # Rung C turns on reranking, which does not exist yet. Failing loudly is
-    # the point: a no-op C would produce a clean-looking ablation row showing
-    # "reranking changed nothing", which is a fabricated result rather than a
-    # measurement.
-    with pytest.raises(NotImplementedError, match="rerank"):
-        retrieve_context(index, "anything", C)
+def test_rerank_rung_reorders_without_changing_the_candidate_set(index: Index):
+    # Reranking must reorder the shortlist, not fetch from the corpus again:
+    # rung C can only improve on what rung B already surfaced, and that
+    # ceiling is what makes B->C a meaningful thing to measure separately.
+    question = "how long must someone work here before taking a career break"
+    before = retrieve_context(index, question, B)
+    after = retrieve_context(index, question, C)
+
+    shortlist = {h.chunk.chunk_id for h in index.search_hybrid(question, k=B.top_k_retrieve)}
+    assert {h.chunk.chunk_id for h in after} <= shortlist
+    assert len(after) == len(before)
+    # Scores come from the cross-encoder now, so they are on a different
+    # scale entirely (unbounded logits, often negative) rather than RRF sums.
+    assert [h.score for h in after] != [h.score for h in before]
+    assert after == sorted(after, key=lambda h: h.score, reverse=True)
 
 
 def test_abstention_without_a_verifier_is_rejected(index: Index):

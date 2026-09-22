@@ -39,6 +39,7 @@ from refuses_to_lie.generation import (
     GeneratedAnswer,
     generate_answer,
 )
+from refuses_to_lie.rerank import Reranker, get_reranker
 from refuses_to_lie.retrieval import Hit, Index
 from refuses_to_lie.verifier import (
     ClaimVerdict,
@@ -68,26 +69,29 @@ class Answer:
         return [c.cite_label for c in self.citations]
 
 
-def retrieve_context(index: Index, question: str, config: RunConfig) -> list[Hit]:
-    """Rungs A-C: pick the ranker, retrieve wide, then narrow to the
-    excerpts that actually go in the prompt.
+def retrieve_context(
+    index: Index,
+    question: str,
+    config: RunConfig,
+    reranker: Reranker | None = None,
+) -> list[Hit]:
+    """Rungs A-C: retrieve a wide shortlist, optionally rerank it, then
+    narrow to the excerpts that actually go in the prompt.
 
-    Retrieving top_k_retrieve and keeping only top_k_context is deliberate:
-    the confidence signal reads the score spread across the wider set, so
-    narrowing too early would throw away the very distribution that tells
-    us whether the top hit stood out.
+    The two-stage width matters for rung C specifically. Reranking can only
+    reorder what the first stage returned, so retrieving top_k_retrieve and
+    narrowing to top_k_context afterwards is what gives the cross-encoder
+    room to promote a chunk the fast rankers put at rank 15. Narrowing
+    first would leave it nothing to do.
     """
-    if config.rerank:
-        raise NotImplementedError(
-            "config.rerank is not implemented yet, so rung C would silently behave "
-            "exactly like rung B and the ablation would report a real difference of "
-            "zero as if it were a measurement. Build the reranker before running C."
-        )
-
     if config.retrieval == "hybrid":
         hits = index.search_hybrid(question, k=config.top_k_retrieve, rrf_k=config.rrf_k)
     else:
         hits = index.search_dense(question, k=config.top_k_retrieve)
+
+    if config.rerank:
+        hits = (reranker or get_reranker(config.reranker_model)).rerank(question, hits)
+
     return hits[: config.top_k_context]
 
 
@@ -109,6 +113,7 @@ def answer_question(
     index: Index,
     config: RunConfig,
     cache_key: str | None = None,
+    reranker: Reranker | None = None,
 ) -> Answer:
     if config.abstain and config.verifier == "off":
         raise ValueError(
@@ -117,7 +122,7 @@ def answer_question(
             "to a threshold calibrated with it."
         )
 
-    hits = retrieve_context(index, question, config)
+    hits = retrieve_context(index, question, config, reranker=reranker)
     draft, agreement = _draft_answer(question, hits, config, cache_key)
 
     verified: VerifiedAnswer | None = None
