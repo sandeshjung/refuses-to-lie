@@ -29,7 +29,11 @@ class RunConfig:
     # that corresponds to a real error rate is a separate step that needs
     # the eval grid to have been run first.
     abstain_threshold: float = 0.5
-    generator_model: str = "gemini-3.6-flash"
+    # gemini-3.6-flash allows 20 requests a DAY on the free tier, which is
+    # ~100 days for one full grid. The lite model has a workable daily
+    # quota; the generator staying on Google also keeps it on a different
+    # provider from the Groq verifier, which is the point of verifying.
+    generator_model: str = "gemini-3.5-flash-lite"
     verifier_model: str = "openai/gpt-oss-120b"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
