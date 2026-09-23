@@ -19,6 +19,7 @@ from pathlib import Path
 from refuses_to_lie.analysis import (
     ConfigScore,
     attach_expectations,
+    coverage_error_points,
     drop_stale,
     load_rows,
     score_grid,
@@ -32,21 +33,37 @@ EVAL_FILE = ROOT / "eval" / "questions.json"
 LABELS = {c.id: c.label for c in LADDER}
 
 
+def _injection_cell(score: ConfigScore) -> str:
+    """Blank out a number the rung cannot produce.
+
+    A rung that never cites cannot be caught citing an injected document,
+    so printing 0.0% there would read as "resisted the attack" when it
+    actually means "not measurable".
+    """
+    return f"{score.injection_citation_rate:>7.1%}" if score.citation_rate else "    n/a"
+
+
 def print_ladder(scores: list[ConfigScore]) -> None:
-    print(f"{'rung':<5}{'n':>5}{'err':>5}{'cover':>8}{'unsup':>8}{'f-abst':>8}{'f-ans':>8}")
-    print("-" * 47)
+    print(
+        f"{'rung':<5}{'n':>5}{'err':>5}{'cover':>8}{'floor':>8}{'f-abst':>8}{'f-ans':>8}{'inj':>8}"
+    )
+    print("-" * 55)
     for s in scores:
         print(
             f"{s.config_id:<5}{s.rows:>5}{s.errors:>5}{s.coverage:>7.1%}"
-            f"{s.unsupported_answer_rate:>8.1%}{s.false_abstention_rate:>8.1%}"
-            f"{s.false_answer_rate:>8.1%}"
+            f"{s.error_floor:>8.1%}{s.false_abstention_rate:>8.1%}"
+            f"{s.false_answer_rate:>8.1%}{_injection_cell(s):>8}"
         )
     print(
         "\ncover  = questions answered rather than abstained\n"
-        "unsup  = of those answers, the share provably unsupported (a FLOOR:\n"
-        "         wrong figures on answerable questions are not counted here)\n"
+        "floor  = of those answers, the share to questions the corpus cannot\n"
+        "         answer. The ONLY rung-to-rung comparable error signal, and a\n"
+        "         floor: wrong figures on answerable questions are not counted\n"
         "f-abst = answerable questions refused\n"
-        "f-ans  = unanswerable questions answered anyway"
+        "f-ans  = unanswerable questions answered anyway\n"
+        "inj    = of those answers, the share citing an injected document.\n"
+        "         n/a where the rung emits no citations, so it cannot be seen.\n"
+        "         Do NOT add this to floor and compare down the ladder."
     )
 
 
@@ -83,12 +100,12 @@ def print_verdicts(scores: list[ConfigScore]) -> None:
 
 
 def print_curve(scores: list[ConfigScore]) -> None:
-    print("\ncoverage / error floor")
+    print("\ncoverage / error floor (comparable signal only)")
     print("-" * 50)
-    for s in scores:
+    for config_id, coverage, floor in coverage_error_points(scores):
         print(
-            f"{s.config_id}  coverage={s.coverage:>6.1%}  "
-            f"error_floor={s.unsupported_answer_rate:>6.1%}   {LABELS.get(s.config_id, '')}"
+            f"{config_id}  coverage={coverage:>6.1%}  "
+            f"error_floor={floor:>6.1%}   {LABELS.get(config_id, '')}"
         )
 
 
