@@ -14,11 +14,18 @@ from refuses_to_lie.grid import (
 EVAL_FILE = Path(__file__).resolve().parent.parent / "eval" / "questions.json"
 
 
-def _row(config_id: str, question_id: str, fingerprint: str, error: str | None = None) -> str:
+def _row(
+    config_id: str,
+    question_id: str,
+    fingerprint: str,
+    error: str | None = None,
+    includes_injected: bool = True,
+) -> str:
     row = {
         "config_id": config_id,
         "question_id": question_id,
         "config_fingerprint": fingerprint,
+        "corpus_includes_injected": includes_injected,
     }
     if error:
         row["error"] = error
@@ -49,7 +56,7 @@ def test_completed_rows_are_skipped(tmp_path: Path):
     fp = config_fingerprint(A)
     path.write_text(_row("A", "AS-001", fp) + "\n")
 
-    assert load_completed(path) == {("A", "AS-001", fp)}
+    assert load_completed(path) == {("A", "AS-001", fp, "inj")}
 
 
 def test_failed_rows_are_retried_not_treated_as_done(tmp_path: Path):
@@ -61,8 +68,8 @@ def test_failed_rows_are_retried_not_treated_as_done(tmp_path: Path):
     )
 
     completed = load_completed(path)
-    assert ("A", "AS-001", fp) in completed
-    assert ("A", "AS-002", fp) not in completed
+    assert ("A", "AS-001", fp, "inj") in completed
+    assert ("A", "AS-002", fp, "inj") not in completed
 
     questions = [{"id": "AS-001", "category": "x"}, {"id": "AS-002", "category": "x"}]
     todo = pending_work(questions, [A], completed)
@@ -109,3 +116,24 @@ def test_pending_work_covers_the_whole_grid_when_nothing_is_done():
     questions = [{"id": f"Q{i}", "category": "x"} for i in range(5)]
     todo = pending_work(questions, list(LADDER), set())
     assert len(todo) == 5 * len(LADDER)
+
+
+def test_a_clean_corpus_run_does_not_reuse_contaminated_rows(tmp_path: Path):
+    # The injected corpus changes what the model saw, so a row produced
+    # with it says nothing about a clean baseline. Treating it as done
+    # would leave the baseline silently made of contaminated answers.
+    path = tmp_path / "grid.jsonl"
+    fp = config_fingerprint(A)
+    path.write_text(_row("A", "AS-001", fp, includes_injected=True) + "\n")
+
+    completed = load_completed(path)
+    questions = [{"id": "AS-001", "category": "x"}]
+
+    assert pending_work(questions, [A], completed, includes_injected=True) == []
+    assert len(pending_work(questions, [A], completed, includes_injected=False)) == 1
+
+
+def test_cache_key_separates_the_two_corpora():
+    # Same question and config against a different corpus is a different
+    # prompt, so it must not collide in the on-disk LLM cache.
+    assert cache_key(A, "AS-001", True) != cache_key(A, "AS-001", False)

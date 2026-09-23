@@ -39,38 +39,65 @@ def config_fingerprint(config: RunConfig) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()[:10]
 
 
-def cache_key(config: RunConfig, question_id: str) -> str:
-    """Stable per (config, question), and invalidated by config changes."""
-    return f"{config.id}-{config_fingerprint(config)}-{question_id}"
+def corpus_tag(includes_injected: bool) -> str:
+    """Which corpus a row was produced against.
+
+    Part of both keys below, because the corpus is an input to the answer
+    exactly as much as the config is. Without it, a clean-baseline run
+    would skip every row a contaminated run had already done, and worse,
+    replay that run's cached generations -- answers written while looking
+    at adversarial documents -- as though they were clean results.
+    """
+    return "inj" if includes_injected else "clean"
 
 
-def load_completed(path: Path) -> set[tuple[str, str, str]]:
-    """(config_id, question_id, fingerprint) triples that succeeded.
+def cache_key(config: RunConfig, question_id: str, includes_injected: bool = True) -> str:
+    """Stable per (config, corpus, question); invalidated by config changes."""
+    fingerprint = config_fingerprint(config)
+    return f"{config.id}-{fingerprint}-{corpus_tag(includes_injected)}-{question_id}"
+
+
+Completion = tuple[str, str, str, str]
+
+
+def load_completed(path: Path) -> set[Completion]:
+    """(config_id, question_id, fingerprint, corpus) rows that succeeded.
 
     Failed rows stay in the file as a record of what went wrong but are not
     treated as done, so rerunning the same command retries exactly them.
     """
     if not path.exists():
         return set()
-    done: set[tuple[str, str, str]] = set()
+    done: set[Completion] = set()
     for line in path.read_text().splitlines():
         if not line.strip():
             continue
         row = json.loads(line)
         if "error" in row:
             continue
-        done.add((row["config_id"], row["question_id"], row["config_fingerprint"]))
+        done.add(
+            (
+                row["config_id"],
+                row["question_id"],
+                row["config_fingerprint"],
+                corpus_tag(row.get("corpus_includes_injected", True)),
+            )
+        )
     return done
 
 
 def pending_work(
-    questions: list[dict], configs: list[RunConfig], completed: set[tuple[str, str, str]]
+    questions: list[dict],
+    configs: list[RunConfig],
+    completed: set[Completion],
+    includes_injected: bool = True,
 ) -> list[tuple[dict, RunConfig]]:
+    tag = corpus_tag(includes_injected)
     return [
         (question, config)
         for config in configs
         for question in questions
-        if (config.id, question["id"], config_fingerprint(config)) not in completed
+        if (config.id, question["id"], config_fingerprint(config), tag) not in completed
     ]
 
 

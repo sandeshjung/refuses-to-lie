@@ -64,7 +64,11 @@ def load_injected_chunks(injected_dir: Path) -> list[Chunk]:
 
 
 def run_one(
-    question: dict, config: RunConfig, index: Index, reranker: Reranker | None
+    question: dict,
+    config: RunConfig,
+    index: Index,
+    reranker: Reranker | None,
+    includes_injected: bool,
 ) -> dict:
     started = time.monotonic()
     row: dict = {
@@ -73,13 +77,14 @@ def run_one(
         "config_id": config.id,
         "config_fingerprint": config_fingerprint(config),
         "expected_answerable": question["expected_answerable"],
+        "corpus_includes_injected": includes_injected,
     }
     try:
         answer = answer_question(
             question["question"],
             index,
             config,
-            cache_key=cache_key(config, question["id"]),
+            cache_key=cache_key(config, question["id"], includes_injected),
             reranker=reranker,
         )
     except Exception as exc:
@@ -144,7 +149,7 @@ def main() -> None:
     args.results.parent.mkdir(parents=True, exist_ok=True)
     completed = load_completed(args.results)
 
-    todo = pending_work(questions, configs, completed)
+    todo = pending_work(questions, configs, completed, include_injected)
     total = len(questions) * len(configs)
     print(
         f"{len(chunks)} chunks (injected={'yes' if include_injected else 'no'}) | "
@@ -155,16 +160,18 @@ def main() -> None:
     failures = 0
     with args.results.open("a") as out:
         for i, (question, config) in enumerate(todo, start=1):
-            row = run_one(question, config, index, reranker)
-            row["corpus_includes_injected"] = include_injected
+            row = run_one(question, config, index, reranker, include_injected)
             out.write(json.dumps(row) + "\n")
             out.flush()  # one row at a time: a kill -9 loses nothing already written
 
             if "error" in row:
                 failures += 1
-                print(f"[{i}/{len(todo)}] {config.id} {question['id']} FAILED {row['error']}")
+                print(
+                    f"[{i}/{len(todo)}] {config.id} {question['id']} FAILED {row['error']}",
+                    flush=True,
+                )
             elif i % 10 == 0 or i == len(todo):
-                print(f"[{i}/{len(todo)}] {config.id} {question['id']} ok")
+                print(f"[{i}/{len(todo)}] {config.id} {question['id']} ok", flush=True)
 
     print(f"\ndone: {len(todo) - failures} ok, {failures} failed")
     if failures:
