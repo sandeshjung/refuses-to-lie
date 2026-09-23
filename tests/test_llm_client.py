@@ -3,12 +3,23 @@ from unittest.mock import Mock
 import pytest
 import requests
 
-from refuses_to_lie.llm_client import call_gemini, call_groq, with_backoff
+from refuses_to_lie.config import A
+from refuses_to_lie.llm_client import (
+    MAX_BACKOFF_SECONDS,
+    RateLimiter,
+    _server_retry_delay,
+    call_gemini,
+    call_groq,
+    with_backoff,
+)
 
 
-def _http_error(status_code: int) -> requests.exceptions.HTTPError:
+def _http_error(
+    status_code: int, retry_after: str | None = None
+) -> requests.exceptions.HTTPError:
     response = Mock(spec=requests.Response)
     response.status_code = status_code
+    response.headers = {"Retry-After": retry_after} if retry_after else {}
     return requests.exceptions.HTTPError(response=response)
 
 
@@ -59,7 +70,7 @@ def test_call_gemini_writes_and_reuses_cache(tmp_path):
     cache_dir = tmp_path / "llm_cache"
     result = call_gemini(
         "Reply with exactly the single word: pineapple",
-        model="gemini-3.6-flash",
+        model=A.generator_model,
         cache_key="test-gemini-pineapple",
         cache_dir=cache_dir,
     )
@@ -81,7 +92,7 @@ def test_call_groq_writes_and_reuses_cache(tmp_path):
     cache_dir = tmp_path / "llm_cache"
     result = call_groq(
         "Reply with exactly the single word: mango",
-        model="openai/gpt-oss-120b",
+        model=A.verifier_model,
         cache_key="test-groq-mango",
         cache_dir=cache_dir,
     )
@@ -95,3 +106,90 @@ def test_call_groq_writes_and_reuses_cache(tmp_path):
         cache_dir=cache_dir,
     )
     assert cached_result == result
+
+
+GEMINI_429 = (
+    "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your "
+    "current quota... Please retry in 19.141830479s.', 'details': [{'@type': "
+    "'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '19s'}]}}"
+)
+
+
+def test_server_retry_delay_is_read_from_a_gemini_429():
+    # The regression that made the first grid run fail: Gemini's free tier
+    # allows 5 requests a minute and says so in the error. An exponential
+    # schedule topping out below that delay burns every retry inside the
+    # window it was told to wait, and the row fails for no good reason.
+    assert _server_retry_delay(Exception(GEMINI_429)) == 19.0
+
+
+def test_server_retry_delay_is_read_from_a_retry_after_header():
+    assert _server_retry_delay(_http_error(429, retry_after="30")) == 30.0
+
+
+def test_server_retry_delay_tolerates_an_http_date_header():
+    dated = _http_error(429, retry_after="Wed, 21 Oct 2026 07:28:00 GMT")
+    assert _server_retry_delay(dated) is None
+
+
+def test_server_retry_delay_is_none_when_the_provider_says_nothing():
+    assert _server_retry_delay(_http_error(503)) is None
+
+
+def test_backoff_waits_at_least_as_long_as_the_server_asked(monkeypatch):
+    slept: list[float] = []
+    monkeypatch.setattr("refuses_to_lie.llm_client.time.sleep", slept.append)
+
+    calls = []
+
+    def rate_limited():
+        calls.append(1)
+        if len(calls) < 2:
+            raise _http_error(429, retry_after="19")
+        return "ok"
+
+    assert with_backoff(rate_limited, base_delay=0.001) == "ok"
+    assert slept and slept[0] >= 19.0
+
+
+def test_backoff_never_sleeps_longer_than_the_cap(monkeypatch):
+    slept: list[float] = []
+    monkeypatch.setattr("refuses_to_lie.llm_client.time.sleep", slept.append)
+
+    calls = []
+
+    def absurd_delay():
+        calls.append(1)
+        if len(calls) < 2:
+            raise _http_error(429, retry_after="99999")
+        return "ok"
+
+    assert with_backoff(absurd_delay, base_delay=0.001) == "ok"
+    assert slept[0] <= MAX_BACKOFF_SECONDS + 1
+
+
+def test_rate_limiter_spaces_calls_by_the_configured_interval(monkeypatch):
+    # Pacing is what keeps a 5-per-minute tier from being discovered by
+    # failing; without it roughly one request in five is wasted.
+    slept: list[float] = []
+    clock = [0.0]
+    monkeypatch.setattr("refuses_to_lie.llm_client.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr("refuses_to_lie.llm_client.time.sleep", slept.append)
+
+    limiter = RateLimiter(requests_per_minute=5)
+    limiter.wait()  # first call is immediate
+    assert slept == []
+
+    clock[0] = 2.0
+    limiter.wait()
+    assert slept == [10.0]  # 12s interval, 2s already elapsed
+
+
+def test_rate_limiter_with_no_limit_never_sleeps(monkeypatch):
+    slept: list[float] = []
+    monkeypatch.setattr("refuses_to_lie.llm_client.time.sleep", slept.append)
+
+    limiter = RateLimiter(requests_per_minute=0)
+    limiter.wait()
+    limiter.wait()
+    assert slept == []
