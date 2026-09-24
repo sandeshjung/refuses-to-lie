@@ -4,9 +4,11 @@ import httpx
 import pytest
 import requests
 
+from refuses_to_lie import llm_client
 from refuses_to_lie.config import A
 from refuses_to_lie.llm_client import (
     MAX_BACKOFF_SECONDS,
+    REQUEST_TIMEOUT_MS,
     RateLimiter,
     _server_retry_delay,
     call_gemini,
@@ -210,3 +212,23 @@ def test_httpx_transport_errors_are_retried(monkeypatch):
 
     assert with_backoff(disconnects_once, base_delay=0.001) == "ok"
     assert len(calls) == 2
+
+
+def test_the_google_client_is_built_with_a_request_timeout(monkeypatch):
+    # A hang is worse than a failure: backoff only retries what raises, so
+    # an untimed request parks a multi-day grid run instead of costing it a
+    # single row. This silently idled a real run for 50 minutes.
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("refuses_to_lie.llm_client.genai.Client", FakeClient)
+    monkeypatch.setattr("refuses_to_lie.llm_client._google_client", None)
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+
+    llm_client._get_google_client()
+
+    assert captured["http_options"].timeout == REQUEST_TIMEOUT_MS
+    assert REQUEST_TIMEOUT_MS > 0

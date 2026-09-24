@@ -1,12 +1,13 @@
 """Thin, retrying, disk-cached clients for the two LLM providers this
 project uses: Google Gemini (generator) and Groq (verifier).
 
-Both free tiers rate-limit, so calls are defended three ways. They are
+Both free tiers rate-limit, so calls are defended four ways. They are
 paced to stay under the published per-minute limit rather than discovering
-it by failing; on a 429 or 5xx they back off, honouring the delay the
-provider asks for instead of guessing one; and when given a cache_key they
-write the result to disk the moment it arrives and skip the call entirely
-if that key is already there.
+it by failing; every request carries a timeout, so a stalled connection
+raises instead of parking the run forever; on a 429, 5xx or transport
+error they back off, honouring the delay the provider asks for instead of
+guessing one; and when given a cache_key they write the result to disk the
+moment it arrives and skip the call entirely if that key is already there.
 
 Together that is the "resumable, not restartable" property an overnight
 eval run needs: it survives a rate limit without losing progress, and a
@@ -28,10 +29,15 @@ import requests
 from dotenv import load_dotenv
 from google import genai
 from google.genai import errors as genai_errors
+from google.genai import types
 
 load_dotenv()
 
 DEFAULT_CACHE_DIR = Path(".cache/llm")
+# Generous enough for a slow generation, short enough that a dead socket
+# surfaces as a retryable error instead of parking the run.
+REQUEST_TIMEOUT_MS = 120_000
+GROQ_TIMEOUT_S = REQUEST_TIMEOUT_MS / 1000
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 _google_client: genai.Client | None = None
@@ -40,7 +46,14 @@ _google_client: genai.Client | None = None
 def _get_google_client() -> genai.Client:
     global _google_client
     if _google_client is None:
-        _google_client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+        _google_client = genai.Client(
+            api_key=os.environ["GOOGLE_API_KEY"],
+            # Without this the client waits forever on a stalled connection.
+            # A hang is worse than a failure here: backoff only retries what
+            # raises, so one dead socket silently parks an overnight grid
+            # run rather than costing it a row. Cost us 50 idle minutes.
+            http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS),
+        )
     return _google_client
 
 
@@ -215,7 +228,7 @@ def call_groq(
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": temperature,
             },
-            timeout=60,
+            timeout=GROQ_TIMEOUT_S,
         )
         response.raise_for_status()
         result: str = response.json()["choices"][0]["message"]["content"]
