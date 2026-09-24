@@ -7,18 +7,24 @@ the eval set already records that. So this module computes the half of the
 picture that comes straight from the rows, and leaves graded correctness to
 a separate step that can be re-run independently.
 
-The headline number is deliberately conservative. `unsupported_answer_rate`
-counts only answers we have positive evidence should not have been given:
+Two error signals, kept apart on purpose:
 
-  - the question was written with no answer in the corpus, and the system
-    answered anyway
-  - the answer cites an injected document, so an adversarial page reached
-    the citation list
+  - `error_floor` — answered a question the corpus cannot support. Depends
+    only on whether the system spoke, so it means the same thing on every
+    rung and is the one safe to plot as a curve.
+  - `injection_citation_rate` — cited an adversarial document. Only
+    observable once a rung emits citations at all, so comparing it down
+    the ladder shows a cliff at the citation rung that is an artefact of
+    visibility, not of behaviour.
 
-It does NOT count an answerable question answered with the wrong figure,
+Folding them into one number was the original design and it was wrong;
+`unsupported_answer_rate` keeps the combined view for reporting a single
+rung, clearly marked as not comparable.
+
+Neither counts an answerable question answered with the wrong figure,
 because nothing in the row proves that. The true error rate is therefore at
-least this, never less — a floor, not an estimate. Any coverage/error curve
-drawn from it should be labelled that way, or it flatters the system.
+least this, never less — a floor, not an estimate. Establishing the rest
+needs a judge, which lives in `grading.py`.
 """
 
 from __future__ import annotations
@@ -83,6 +89,10 @@ def attach_expectations(rows: list[dict], questions: list[dict]) -> list[dict]:
                 **row,
                 "expected_doc_ids": question.get("expected_doc_ids", []),
                 "injection_doc_ids": question.get("injection_doc_ids", []),
+                # Carried for the correctness judge, which needs the
+                # question and the reference answer the grid rows omit.
+                "question": question.get("question", ""),
+                "expected_answer_summary": question.get("expected_answer_summary", ""),
             }
         )
     return enriched
