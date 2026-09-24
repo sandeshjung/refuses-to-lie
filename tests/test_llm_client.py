@@ -1,5 +1,6 @@
 from unittest.mock import Mock
 
+import httpx
 import pytest
 import requests
 
@@ -193,3 +194,19 @@ def test_rate_limiter_with_no_limit_never_sleeps(monkeypatch):
     limiter.wait()
     limiter.wait()
     assert slept == []
+
+
+def test_httpx_transport_errors_are_retried(monkeypatch):
+    # google-genai speaks httpx, so a server hanging up mid-request does
+    # not arrive as a requests exception. Missing this cost a real grid row.
+    monkeypatch.setattr("refuses_to_lie.llm_client.time.sleep", lambda _: None)
+    calls = []
+
+    def disconnects_once():
+        calls.append(1)
+        if len(calls) < 2:
+            raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
+        return "ok"
+
+    assert with_backoff(disconnects_once, base_delay=0.001) == "ok"
+    assert len(calls) == 2

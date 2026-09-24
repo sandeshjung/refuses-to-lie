@@ -23,6 +23,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+import httpx
 import requests
 from dotenv import load_dotenv
 from google import genai
@@ -48,6 +49,13 @@ def _is_retryable(exc: Exception) -> bool:
         return exc.code in _RETRYABLE_STATUS_CODES
     if isinstance(exc, requests.exceptions.HTTPError) and exc.response is not None:
         return exc.response.status_code in _RETRYABLE_STATUS_CODES
+    # httpx, not requests, is what google-genai speaks, so its transport
+    # failures arrive as a different exception tree entirely. A server
+    # hanging up mid-request is the textbook retryable error, and missing
+    # it here cost a grid row to "Server disconnected without sending a
+    # response" -- a failure that would have succeeded on the next try.
+    if isinstance(exc, httpx.TransportError):
+        return True
     return isinstance(exc, requests.exceptions.ConnectionError | requests.exceptions.Timeout)
 
 

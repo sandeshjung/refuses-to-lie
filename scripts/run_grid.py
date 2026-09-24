@@ -19,6 +19,7 @@ top_k silently reusing stale answers is not possible.
 Usage:
   uv run python scripts/run_grid.py --sample 40          # stratified slice
   uv run python scripts/run_grid.py --configs A,B        # some rungs
+  uv run python scripts/run_grid.py --category prompt_injection
   uv run python scripts/run_grid.py                      # the full grid
 """
 
@@ -118,6 +119,11 @@ def run_one(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", type=int, default=0, help="stratified subset size")
+    parser.add_argument(
+        "--category",
+        default="",
+        help="restrict to one eval category, e.g. prompt_injection",
+    )
     parser.add_argument("--configs", default="", help="comma-separated rung ids, e.g. A,B")
     parser.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
     parser.add_argument(
@@ -135,6 +141,10 @@ def main() -> None:
             parser.error(f"no ladder configs matched {sorted(wanted)}")
 
     questions = json.loads(EVAL_FILE.read_text())
+    if args.category:
+        questions = [q for q in questions if q["category"] == args.category]
+        if not questions:
+            parser.error(f"no questions in category {args.category!r}")
     if args.sample:
         questions = stratified_sample(questions, args.sample)
 
