@@ -3,6 +3,7 @@ from typing import Literal
 
 Retrieval = Literal["dense", "hybrid"]
 VerifierAction = Literal["off", "annotate", "drop_unsupported"]
+ConfidenceSource = Literal["composite", "answerability"]
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,19 @@ class RunConfig:
     verifier_model: str = "openai/gpt-oss-120b"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
+    # --- added after the A-F grid was collected ---------------------------
+    # These enter the config fingerprint only when set away from their
+    # default (grid.ADDED_LATER_FIELDS), so adding them leaves every existing
+    # A-F row valid instead of silently marking days of results stale.
+    #
+    # The composite (retrieval margin + groundedness + agreement) measured
+    # as anti-correlated with correctness: wrong answers scored higher.
+    # "answerability" replaces it with one question-conditioned check.
+    confidence_source: ConfidenceSource = "composite"
+    # Injection won by source capture, not instruction-following, so the
+    # defence is to stop unregistered documents reaching the context at all.
+    require_provenance: bool = False
+
 
 A = RunConfig(id="A", label="dense retrieval only, no abstention")
 B = replace(A, id="B", label="+ hybrid retrieval (BM25 + dense, RRF)", retrieval="hybrid")
@@ -46,3 +60,20 @@ E = replace(D, id="E", label="+ groundedness verifier", verifier="drop_unsupport
 F = replace(E, id="F", label="+ calibrated abstention (full system)", abstain=True)
 
 LADDER = (A, B, C, D, E, F)
+
+# Rungs built from what the A-F grid measured. Kept out of LADDER so the
+# published ladder -- and every command that runs it by default -- is
+# unchanged; run them explicitly with --configs G,H.
+G = replace(
+    F,
+    id="G",
+    label="+ answerability gate replaces composite confidence",
+    confidence_source="answerability",
+    # Answerability scores 1.0 / 0.5 / 0.0, so 0.75 means: answer only when
+    # the context is judged to fully contain the answer.
+    abstain_threshold=0.75,
+)
+H = replace(G, id="H", label="+ provenance register", require_provenance=True)
+
+EXTENSIONS = (G, H)
+ALL_CONFIGS = LADDER + EXTENSIONS

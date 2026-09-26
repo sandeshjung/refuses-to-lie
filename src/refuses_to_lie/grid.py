@@ -27,6 +27,14 @@ from refuses_to_lie.config import RunConfig
 # Cosmetic: changing a label should not invalidate completed work.
 NON_SUBSTANTIVE_FIELDS = frozenset({"label"})
 
+# Fields added to RunConfig after results were collected. Hashing every
+# field would mean adding ANY new capability changes every config's
+# fingerprint and marks every existing row stale -- days of free-tier quota
+# thrown away for a feature those rows never used. So a field listed here
+# enters the hash only when set away from its default; at its default it
+# is, by definition, the behaviour the old rows already ran.
+ADDED_LATER_FIELDS = frozenset({"confidence_source", "require_provenance"})
+
 
 def config_fingerprint(config: RunConfig) -> str:
     """Short hash over everything about a config that could change output."""
@@ -34,6 +42,7 @@ def config_fingerprint(config: RunConfig) -> str:
         f.name: getattr(config, f.name)
         for f in fields(config)
         if f.name not in NON_SUBSTANTIVE_FIELDS
+        and not (f.name in ADDED_LATER_FIELDS and getattr(config, f.name) == f.default)
     }
     blob = json.dumps(substantive, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()[:10]

@@ -137,3 +137,42 @@ def test_cache_key_separates_the_two_corpora():
     # Same question and config against a different corpus is a different
     # prompt, so it must not collide in the on-disk LLM cache.
     assert cache_key(A, "AS-001", True) != cache_key(A, "AS-001", False)
+
+
+# Fingerprints the committed A-F results were produced under. If this test
+# fails, a change to RunConfig or to config_fingerprint has just marked every
+# existing grid row stale -- days of rate-limited quota. Add new fields to
+# ADDED_LATER_FIELDS instead of changing these values.
+RECORDED_FINGERPRINTS = {
+    "A": "a61b52ce27",
+    "B": "73489207b5",
+    "C": "4130bd632e",
+    "D": "2f4cb2653e",
+    "E": "513df9cff4",
+    "F": "1c3589d9fa",
+}
+
+
+def test_existing_ladder_fingerprints_are_unchanged():
+    for config in LADDER:
+        assert config_fingerprint(config) == RECORDED_FINGERPRINTS[config.id], config.id
+
+
+def test_a_later_field_at_its_default_does_not_move_the_fingerprint():
+    # The whole point of ADDED_LATER_FIELDS: a capability the old rows never
+    # used must not invalidate them just by existing.
+    assert config_fingerprint(replace(A, require_provenance=False)) == config_fingerprint(A)
+
+
+def test_a_later_field_turned_on_does_move_the_fingerprint():
+    assert config_fingerprint(replace(A, require_provenance=True)) != config_fingerprint(A)
+    assert config_fingerprint(replace(A, confidence_source="answerability")) != (
+        config_fingerprint(A)
+    )
+
+
+def test_extension_rungs_do_not_collide_with_the_ladder():
+    from refuses_to_lie.config import ALL_CONFIGS
+
+    prints = [config_fingerprint(c) for c in ALL_CONFIGS]
+    assert len(set(prints)) == len(prints)
