@@ -26,7 +26,9 @@ that grade.
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
 from refuses_to_lie.llm_client import call_groq
 
@@ -36,6 +38,18 @@ from refuses_to_lie.llm_client import call_groq
 _GRADE_CHECK_ORDER = ("INCORRECT", "PARTIAL", "CORRECT")
 UNGRADED = "UNGRADED"
 
+# Bump when either prompt changes. Grades are cached by answer text, so
+# without this a revised rubric would silently hand back the old verdicts.
+#   v1  original rubric
+#   v2  grades facts not completeness; separates hedging from error; grades
+#       false-premise answers on whether they reject the premise
+JUDGE_VERSION = "v2"
+LEGACY_VERSION = "v1"  # grades written before versioning existed
+
+# v1 said "less detailed is CORRECT" and, two sentences later, "wrong OR
+# MISSING on others is PARTIAL". An answer omitting a detail satisfies
+# both, and in a hand audit the judge resolved it towards PARTIAL,
+# inflating error. v2 grades what the answer says, not what it leaves out.
 _GRADE_PROMPT = """You are grading a question-answering system against a \
 reference answer written from the source documents.
 
@@ -45,12 +59,40 @@ Reference answer: {reference}
 
 System answer: {answer}
 
-Does the system answer agree with the reference on the facts that matter -- \
-figures, durations, eligibility and entitlements? Ignore differences in \
-wording, length, formatting and citation markers. A system answer that is \
-right but less detailed than the reference is CORRECT. One that states a \
-different figure, duration or condition is INCORRECT. One that is right on \
-some facts and wrong or missing on others is PARTIAL.
+Grade the facts the system answer STATES, not how complete it is. Ignore \
+wording, length, formatting and citation markers.
+
+- CORRECT: every figure, duration, condition or entitlement the answer states \
+agrees with the reference, and it answers the question asked. Leaving out \
+details the reference includes is still CORRECT.
+- PARTIAL: the answer gives the correct fact but ALSO presents a conflicting \
+figure or condition as possibly applying (for example "£129, or £123 according \
+to another document"), or it answers only one part of a question that asks \
+for several things.
+- INCORRECT: the answer states a figure, duration, condition or entitlement \
+that contradicts the reference, attaches a correct figure to the wrong thing, \
+or does not answer the question asked.
+
+Reply with exactly one word: CORRECT, INCORRECT, or PARTIAL."""
+
+# False-premise questions have no answer to compare against: the right
+# response is to reject the premise. The first cut of the metrics counted
+# ANY answer to them as an error, and every one of the six answered at
+# rung D turned out to be a correct, cited rejection of the premise.
+_PREMISE_PROMPT = """The question below rests on a FALSE premise. The note \
+explains, from the source documents, why it is false.
+
+Question: {question}
+
+Why the premise is false: {reference}
+
+System answer: {answer}
+
+- CORRECT: the answer rejects or corrects the premise -- it says the assumption \
+is wrong and gives the actual position, or plainly declines to accept it.
+- PARTIAL: the answer hedges, neither accepting nor clearly rejecting the premise.
+- INCORRECT: the answer accepts the premise, explains or justifies it, or \
+answers as if it were true.
 
 Reply with exactly one word: CORRECT, INCORRECT, or PARTIAL."""
 
@@ -61,6 +103,8 @@ class Grade:
     config_id: str
     verdict: str
     answer: str
+    # Rows written before versioning existed carry no field; they were v1.
+    judge_version: str = LEGACY_VERSION
 
     @property
     def is_wrong(self) -> bool:
@@ -82,38 +126,48 @@ def _parse_grade(response: str) -> str:
     return UNGRADED
 
 
-def gradeable(row: dict) -> bool:
-    """Only answers that claim to be answers, to questions with a reference.
+FALSE_PREMISE = "false_premise"
 
-    An abstention has no factual content to grade, and a question the
-    corpus cannot answer has no reference to grade against -- the grid's
-    own `error_floor` already covers that case.
+
+def is_false_premise(row: dict) -> bool:
+    return row.get("category") == FALSE_PREMISE
+
+
+def gradeable(row: dict) -> bool:
+    """Answers with something to be graded against.
+
+    Two kinds qualify: an answer to an answerable question, graded against
+    its reference, and an answer to a false-premise question, graded on
+    whether it rejected the premise. An abstention has no factual content,
+    and a question the corpus simply cannot answer is covered by the grid's
+    own `error_floor` -- answering it at all is the error.
     """
-    return (
-        "error" not in row
-        and not row.get("abstained", False)
-        and row.get("expected_answerable", False)
-        and bool(row.get("expected_answer_summary"))
-        and bool(row.get("answer"))
-    )
+    if "error" in row or row.get("abstained", False) or not row.get("answer"):
+        return False
+    if is_false_premise(row):
+        return bool(row.get("notes"))
+    return bool(row.get("expected_answerable")) and bool(row.get("expected_answer_summary"))
 
 
 def grade_cache_key(row: dict) -> str:
-    """Keyed on the answer text, not the config.
+    """Keyed on judge version and answer text, not on the config.
 
     Two rungs that produced identical text get one grade and one API call,
-    which on a ladder where later rungs often leave the answer untouched
-    is most of them.
+    which on a ladder where later rungs often leave the answer untouched is
+    most of them. The version is in the key so a revised rubric regrades
+    instead of replaying the old verdict from disk.
     """
     digest = hashlib.sha256(row["answer"].encode()).hexdigest()[:12]
-    return f"grade-{row['question_id']}-{digest}"
+    return f"grade-{JUDGE_VERSION}-{row['question_id']}-{digest}"
 
 
 def grade_row(row: dict, model: str) -> Grade:
-    prompt = _GRADE_PROMPT.format(
-        question=row["question"],
-        reference=row["expected_answer_summary"],
-        answer=row["answer"],
+    if is_false_premise(row):
+        template, reference = _PREMISE_PROMPT, row["notes"]
+    else:
+        template, reference = _GRADE_PROMPT, row["expected_answer_summary"]
+    prompt = template.format(
+        question=row["question"], reference=reference, answer=row["answer"]
     )
     response = call_groq(prompt, model=model, temperature=0.0, cache_key=grade_cache_key(row))
     return Grade(
@@ -121,7 +175,28 @@ def grade_row(row: dict, model: str) -> Grade:
         config_id=row["config_id"],
         verdict=_parse_grade(response),
         answer=row["answer"],
+        judge_version=JUDGE_VERSION,
     )
+
+
+def load_grades(path: Path, version: str = JUDGE_VERSION) -> dict[tuple[str, str], Grade]:
+    """Grades from one judge version, keyed by (config_id, question_id).
+
+    Filtering by version matters because the grades file is append-only:
+    after a rubric change it holds both generations, and mixing them would
+    report a number no single judge produced. Later rows win, so a regrade
+    supersedes an earlier grade of the same row.
+    """
+    if not path.exists():
+        return {}
+    grades: dict[tuple[str, str], Grade] = {}
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        grade = Grade(**json.loads(line))
+        if grade.judge_version == version:
+            grades[(grade.config_id, grade.question_id)] = grade
+    return grades
 
 
 def accuracy(grades: list[Grade]) -> tuple[float, float]:

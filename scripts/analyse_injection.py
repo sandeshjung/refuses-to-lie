@@ -29,7 +29,7 @@ from refuses_to_lie.analysis import (
     load_rows,
     retrieved_injection,
 )
-from refuses_to_lie.config import LADDER
+from refuses_to_lie.config import ALL_CONFIGS
 from refuses_to_lie.injection import InjectionOutcome, classify, summarise
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -92,7 +92,7 @@ def main() -> None:
     questions = json.loads(EVAL_FILE.read_text())
     style_of = {q["id"]: q.get("injection_style", "unknown") for q in questions}
 
-    rows, stale = drop_stale(load_rows(args.results), LADDER)
+    rows, stale = drop_stale(load_rows(args.results), ALL_CONFIGS)
     if stale:
         print(f"ignoring {stale} row(s) from superseded config versions\n")
     rows = attach_expectations(rows, questions)

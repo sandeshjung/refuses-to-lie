@@ -23,14 +23,15 @@ from refuses_to_lie.analysis import (
     drop_stale,
     load_rows,
     score_grid,
+    wilson_halfwidth,
 )
-from refuses_to_lie.config import LADDER
+from refuses_to_lie.config import ALL_CONFIGS
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_RESULTS = ROOT / "results" / "grid.jsonl"
 EVAL_FILE = ROOT / "eval" / "questions.json"
 
-LABELS = {c.id: c.label for c in LADDER}
+LABELS = {c.id: c.label for c in ALL_CONFIGS}
 
 
 def _injection_cell(score: ConfigScore) -> str:
@@ -99,14 +100,25 @@ def print_verdicts(scores: list[ConfigScore]) -> None:
         print(f"{s.config_id:<5}{total:>5} claims   {breakdown}")
 
 
+def _ci(rate: float, n: int) -> str:
+    """A rate with its 95% interval, e.g. '62.5% ±7.9'."""
+    return f"{rate:>6.1%} ±{wilson_halfwidth(rate, n) * 100:4.1f}"
+
+
 def print_curve(scores: list[ConfigScore]) -> None:
-    print("\ncoverage / error floor (comparable signal only)")
-    print("-" * 50)
+    print("\ncoverage / error floor with 95% intervals (comparable signal only)")
+    print("-" * 78)
+    by_id = {s.config_id: s for s in scores}
     for config_id, coverage, floor in coverage_error_points(scores):
+        s = by_id[config_id]
         print(
-            f"{config_id}  coverage={coverage:>6.1%}  "
-            f"error_floor={floor:>6.1%}   {LABELS.get(config_id, '')}"
+            f"{config_id}  coverage={_ci(coverage, s.n_ok)}  "
+            f"floor={_ci(floor, s.n_answered)}   {LABELS.get(config_id, '')}"
         )
+    print(
+        "\nIntervals are 95% Wilson, in percentage points. Two rungs whose\n"
+        "intervals overlap heavily have NOT been shown to differ."
+    )
 
 
 def main() -> None:
@@ -117,7 +129,7 @@ def main() -> None:
     if not args.results.exists():
         parser.error(f"no results at {args.results} - run scripts/run_grid.py first")
 
-    rows, stale = drop_stale(load_rows(args.results), LADDER)
+    rows, stale = drop_stale(load_rows(args.results), ALL_CONFIGS)
     if stale:
         print(f"ignoring {stale} row(s) from superseded config versions\n")
     if not rows:

@@ -24,26 +24,25 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from refuses_to_lie.analysis import attach_expectations, drop_stale, load_rows
-from refuses_to_lie.config import LADDER, A
-from refuses_to_lie.grading import Grade, accuracy, grade_row, gradeable
+from refuses_to_lie.analysis import (
+    attach_expectations,
+    drop_stale,
+    load_rows,
+    wilson_halfwidth,
+)
+from refuses_to_lie.config import ALL_CONFIGS, A
+from refuses_to_lie.grading import (
+    JUDGE_VERSION,
+    Grade,
+    accuracy,
+    grade_row,
+    gradeable,
+    load_grades,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 EVAL_FILE = ROOT / "eval" / "questions.json"
 DEFAULT_RESULTS = ROOT / "results" / "clean.jsonl"
-
-
-def load_existing(path: Path) -> dict[tuple[str, str], Grade]:
-    """Grades already written, so a rerun costs nothing for them."""
-    if not path.exists():
-        return {}
-    existing = {}
-    for line in path.read_text().splitlines():
-        if line.strip():
-            row = json.loads(line)
-            grade = Grade(**row)
-            existing[(grade.config_id, grade.question_id)] = grade
-    return existing
 
 
 def main() -> None:
@@ -56,20 +55,22 @@ def main() -> None:
 
     grades_path = args.grades or args.results.with_name(args.results.stem + "-grades.jsonl")
 
-    rows, _ = drop_stale(load_rows(args.results), LADDER)
+    rows, _ = drop_stale(load_rows(args.results), ALL_CONFIGS)
     rows = attach_expectations(rows, json.loads(EVAL_FILE.read_text()))
     if args.configs:
         wanted = {c.strip().upper() for c in args.configs.split(",")}
         rows = [r for r in rows if r["config_id"] in wanted]
 
     to_grade = [r for r in rows if gradeable(r)]
-    existing = load_existing(grades_path)
+    # Only this judge version counts as done: a rubric change regrades.
+    existing = load_grades(grades_path)
     pending = [r for r in to_grade if (r["config_id"], r["question_id"]) not in existing]
 
     print(
         f"{len(rows)} rows | {len(to_grade)} gradeable "
         f"(answered, answerable, has reference)\n"
-        f"{len(existing)} already graded, {len(pending)} to grade -> {grades_path}\n"
+        f"judge {JUDGE_VERSION}: {len(existing)} already graded, "
+        f"{len(pending)} to grade -> {grades_path}\n"
     )
 
     grades = list(existing.values())
@@ -91,12 +92,13 @@ def main() -> None:
     for grade in grades:
         by_config[grade.config_id].append(grade)
 
-    print(f"\n{'rung':<6}{'graded':>8}{'correct':>10}{'wrong':>8}")
-    print("-" * 32)
+    print(f"\n{'rung':<6}{'graded':>8}{'correct':>18}{'wrong':>8}")
+    print("-" * 42)
     for config_id in sorted(by_config):
         group = by_config[config_id]
         correct, wrong = accuracy(group)
-        print(f"{config_id:<6}{len(group):>8}{correct:>9.1%}{wrong:>8.1%}")
+        halfwidth = wilson_halfwidth(correct, len(group)) * 100
+        print(f"{config_id:<6}{len(group):>8}{correct:>10.1%} ±{halfwidth:4.1f}{wrong:>9.1%}")
     print(
         "\nwrong = INCORRECT or PARTIAL. A half-right answer about an "
         "entitlement\n        is still one somebody could act on and be wrong."
