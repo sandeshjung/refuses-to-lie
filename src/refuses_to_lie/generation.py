@@ -72,7 +72,7 @@ class GeneratedAnswer:
         return self.text.strip() == ABSTAIN_PHRASE
 
 
-def _format_excerpts(hits: list[Hit]) -> str:
+def format_excerpts(hits: list[Hit]) -> str:
     return "\n\n".join(
         f"[{h.chunk.chunk_id}] ({h.chunk.cite_label})\n{h.chunk.text}" for h in hits
     )
@@ -98,7 +98,7 @@ def generate_answer(
         raise ValueError("generate_answer requires at least one retrieved chunk")
 
     hits_by_id = {h.chunk.chunk_id: h for h in hits}
-    excerpts = _format_excerpts(hits)
+    excerpts = format_excerpts(hits)
 
     if config.require_citations:
         prompt = _PROMPT_WITH_CITATIONS.format(

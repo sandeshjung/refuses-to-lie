@@ -33,7 +33,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from refuses_to_lie.answering import answer_question
-from refuses_to_lie.config import LADDER, RunConfig
+from refuses_to_lie.config import ALL_CONFIGS, LADDER, RunConfig
 from refuses_to_lie.corpus import Chunk, chunk_document, load_all_pages
 from refuses_to_lie.grid import (
     cache_key,
@@ -43,12 +43,14 @@ from refuses_to_lie.grid import (
     stratified_sample,
 )
 from refuses_to_lie.pipeline import load_corpus_chunks
+from refuses_to_lie.provenance import trusted_doc_ids
 from refuses_to_lie.rerank import Reranker, get_reranker
 from refuses_to_lie.retrieval import Index
 
 ROOT = Path(__file__).resolve().parent.parent
 EVAL_FILE = ROOT / "eval" / "questions.json"
 DEFAULT_RESULTS = ROOT / "results" / "grid.jsonl"
+REGISTER = ROOT / "corpus" / "register.json"
 
 
 def load_injected_chunks(injected_dir: Path) -> list[Chunk]:
@@ -70,6 +72,7 @@ def run_one(
     index: Index,
     reranker: Reranker | None,
     includes_injected: bool,
+    trusted_docs: frozenset[str] | None = None,
 ) -> dict:
     started = time.monotonic()
     row: dict = {
@@ -87,6 +90,7 @@ def run_one(
             config,
             cache_key=cache_key(config, question["id"], includes_injected),
             reranker=reranker,
+            trusted_docs=trusted_docs,
         )
     except Exception as exc:
         # A failed row must not kill the grid: record it and move on, so a
@@ -133,10 +137,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # The default is the published A-F ladder only, so existing commands
+    # keep doing exactly what they did; the extension rungs are opt-in.
     configs = list(LADDER)
     if args.configs:
         wanted = {c.strip().upper() for c in args.configs.split(",")}
-        configs = [c for c in LADDER if c.id in wanted]
+        configs = [c for c in ALL_CONFIGS if c.id in wanted]
         if not configs:
             parser.error(f"no ladder configs matched {sorted(wanted)}")
 
@@ -155,6 +161,12 @@ def main() -> None:
 
     index = Index(chunks)
     reranker = get_reranker() if any(c.rerank for c in configs) else None
+    # Loaded from the committed register, not rebuilt from the corpus
+    # directories: rebuilding would register whatever happens to be on disk,
+    # including anything an attacker managed to drop there.
+    trusted_docs = (
+        trusted_doc_ids(REGISTER) if any(c.require_provenance for c in configs) else None
+    )
 
     args.results.parent.mkdir(parents=True, exist_ok=True)
     completed = load_completed(args.results)
@@ -170,7 +182,7 @@ def main() -> None:
     failures = 0
     with args.results.open("a") as out:
         for i, (question, config) in enumerate(todo, start=1):
-            row = run_one(question, config, index, reranker, include_injected)
+            row = run_one(question, config, index, reranker, include_injected, trusted_docs)
             out.write(json.dumps(row) + "\n")
             out.flush()  # one row at a time: a kill -9 loses nothing already written
 

@@ -1,0 +1,200 @@
+{
+  "B1.1": {
+    "doc_id": "B1.1",
+    "source": "employer",
+    "file": "b1.1-maintaining-high-professional-standards-oct-22-SUPERSEDED.pdf",
+    "sha256": "fed161b8c38030cb1207dcc4b4f7e279a8a13bb659a00ac125dac283df6c4ce9"
+  },
+  "Print Maternity pay and leave - GOV.UK": {
+    "doc_id": "Print Maternity pay and leave - GOV.UK",
+    "source": "statutory",
+    "file": "Print Maternity pay and leave - GOV.UK.pdf",
+    "sha256": "6d81cb57234fb2c334dd8fdb209d7b9abf012473f4947a859200e761df00998d"
+  },
+  "Print Maternity pay and leave 2025 - GOV.UK": {
+    "doc_id": "Print Maternity pay and leave 2025 - GOV.UK",
+    "source": "statutory",
+    "file": "Print Maternity pay and leave 2025 - GOV.UK.pdf",
+    "sha256": "c49d897c76119b6d2e00ece77e6e3c3ea8be23f9af4046d3be405f193b5e5e8f"
+  },
+  "Print Paternity pay and leave - GOV.UK": {
+    "doc_id": "Print Paternity pay and leave - GOV.UK",
+    "source": "statutory",
+    "file": "Print Paternity pay and leave - GOV.UK.pdf",
+    "sha256": "8fcd87166d7c31a2423710fa9ef6934e62e99930417036ecec9d64a9e269c617"
+  },
+  "Print Paternity pay and leave 2025- GOV.UK": {
+    "doc_id": "Print Paternity pay and leave 2025- GOV.UK",
+    "source": "statutory",
+    "file": "Print Paternity pay and leave 2025- GOV.UK.pdf",
+    "sha256": "d37f032fe86075cf9e7bd42aef9647acc0cb7feaec153a31cdb970722643d732"
+  },
+  "Print Shared Parental Leave and Pay - GOV.UK": {
+    "doc_id": "Print Shared Parental Leave and Pay - GOV.UK",
+    "source": "statutory",
+    "file": "Print Shared Parental Leave and Pay - GOV.UK.pdf",
+    "sha256": "aceada276c5945b9442bc5810d748c5dfc89d1bbe477e2f25e896596b999f506"
+  },
+  "Print Shared Parental Leave and Pay 2025- GOV.UK": {
+    "doc_id": "Print Shared Parental Leave and Pay 2025- GOV.UK",
+    "source": "statutory",
+    "file": "Print Shared Parental Leave and Pay 2025- GOV.UK.pdf",
+    "sha256": "444bbb56040a8042a235e6d8e5b170e359a4cf7f6e236a931ce0db6d1e87efa2"
+  },
+  "Print Statutory Sick Pay (SSP) - GOV.UK": {
+    "doc_id": "Print Statutory Sick Pay (SSP) - GOV.UK",
+    "source": "statutory",
+    "file": "Print Statutory Sick Pay (SSP) - GOV.UK.pdf",
+    "sha256": "bb4dcbd174ff74fe2999b6f7a51162f26ecf72339c6019a2d0b850c4c8df4d53"
+  },
+  "Print Statutory Sick Pay (SSP) 2025 - GOV.UK": {
+    "doc_id": "Print Statutory Sick Pay (SSP) 2025 - GOV.UK",
+    "source": "statutory",
+    "file": "Print Statutory Sick Pay (SSP) 2025 - GOV.UK.pdf",
+    "sha256": "7428f2ea23678585a27cb3bc8a1b66d5a9b75c227126ccd99588e6f2a96dd0d5"
+  },
+  "Rates and allowances_ National Insurance contributions - GOV.UK": {
+    "doc_id": "Rates and allowances_ National Insurance contributions - GOV.UK",
+    "source": "statutory",
+    "file": "Rates and allowances_ National Insurance contributions - GOV.UK.pdf",
+    "sha256": "2299b4a1dc92e0c334942dc5619c5601b671f17396f2740af8214de11963a78d"
+  },
+  "Rates and allowances_ National Insurance contributions 2025- GOV.UK": {
+    "doc_id": "Rates and allowances_ National Insurance contributions 2025- GOV.UK",
+    "source": "statutory",
+    "file": "Rates and allowances_ National Insurance contributions 2025- GOV.UK.pdf",
+    "sha256": "305d36a5126ed83f6d3b0730b4de1168027bc33bc79dd37db4248a106792f40f"
+  },
+  "UHN-PO-122": {
+    "doc_id": "UHN-PO-122",
+    "source": "employer",
+    "file": "uhn-freedom-to-speak-up-raising-concerns-at-work-nov-28-pdf.pdf",
+    "sha256": "614bf9bc21f99ef4b2e7afe4a107fe0d22c7d027ad6c38c272ff0243783b2ed4"
+  },
+  "UHN-PO-HR07": {
+    "doc_id": "UHN-PO-HR07",
+    "source": "employer",
+    "file": "uhn-on-call-april-26-pdf.pdf",
+    "sha256": "c8946b2a6a7dd54fad0901fa3c546e074b603048a4a3c6933b5f7a9ae9c40cd0"
+  },
+  "UHN-PO-HR10": {
+    "doc_id": "UHN-PO-HR10",
+    "source": "employer",
+    "file": "uhn-leave-in-relation-to-starting-a-family-nov-28-pdf.pdf",
+    "sha256": "dba4e630c7d318c6a987d0b678d1523641450741976e23e386a404ba1841793e"
+  },
+  "UHN-PO-HR18": {
+    "doc_id": "UHN-PO-HR18",
+    "source": "employer",
+    "file": "uhn-po-hr18-agile-flexible-or-hybrid-working-december-2026pdf.pdf",
+    "sha256": "ecc75e4d47864f571be01adab06e6e70005de4807ba21a5262bc8c075c858fbf"
+  },
+  "UHN-PO-HR24": {
+    "doc_id": "UHN-PO-HR24",
+    "source": "employer",
+    "file": "uhn-annual-leave-for-agenda-for-change-staff000100pdf.pdf",
+    "sha256": "b7a2e64baa62eb92702280c07f16878d29d5150613de3d37d490b4964c345600"
+  },
+  "UHN-PO-HR26": {
+    "doc_id": "UHN-PO-HR26",
+    "source": "employer",
+    "file": "b11-maintaining-high-professional-standards-may-2027.pdf",
+    "sha256": "c35c2606a01a42d89fdaaee453a3bae5bcc2907941f70c1d0fdb47724952914e"
+  },
+  "UHN-PO-HR87": {
+    "doc_id": "UHN-PO-HR87",
+    "source": "employer",
+    "file": "uhn-resolution-policy-jan-28pdf.pdf",
+    "sha256": "511933c5109aec5ca4ebe8480a8b95a3b1adbe518d8b4c21bc8a5ae1f2de6d9b"
+  },
+  "a1-recruitment-and-selection-policy-april-26pdf": {
+    "doc_id": "a1-recruitment-and-selection-policy-april-26pdf",
+    "source": "employer",
+    "file": "a1-recruitment-and-selection-policy-april-26pdf.pdf",
+    "sha256": "fcff911a470aedba0b16a9bab094d1436d23a54c0a121cfff8ef38e144b9f2f3"
+  },
+  "a12-disclosure-of-criminal-background-including-rehabilitation-of-offenders-act-policy-jan-2026": {
+    "doc_id": "a12-disclosure-of-criminal-background-including-rehabilitation-of-offenders-act-policy-jan-2026",
+    "source": "employer",
+    "file": "a12-disclosure-of-criminal-background-including-rehabilitation-of-offenders-act-policy-jan-2026.pdf",
+    "sha256": "de7f3d86637c181eff09d3f8fbde507f7bc5a9c1c60db781dcc453295667c7bc"
+  },
+  "a13-use-of-identification-badges-policy-april-26pdf": {
+    "doc_id": "a13-use-of-identification-badges-policy-april-26pdf",
+    "source": "employer",
+    "file": "a13-use-of-identification-badges-policy-april-26pdf.pdf",
+    "sha256": "6d37d9aca0d33b37ff000438479900959b5bd4a12c3308bf755b6e7aedb460d5"
+  },
+  "a14-professional-registration-policy-april26pdf": {
+    "doc_id": "a14-professional-registration-policy-april26pdf",
+    "source": "employer",
+    "file": "a14-professional-registration-policy-april26pdf.pdf",
+    "sha256": "39ae1f2aae6e99b17278ba3788b51d7622490032db16267465ce138d0d1d9d5f"
+  },
+  "a16-secondment-policy-april-26pdf": {
+    "doc_id": "a16-secondment-policy-april-26pdf",
+    "source": "employer",
+    "file": "a16-secondment-policy-april-26pdf.pdf",
+    "sha256": "6188f1ead505f9a316c239105a470229adb221868c2d06eb9470eb5868646e40"
+  },
+  "a18-death-in-service-policy-april-26pdf": {
+    "doc_id": "a18-death-in-service-policy-april-26pdf",
+    "source": "employer",
+    "file": "a18-death-in-service-policy-april-26pdf.pdf",
+    "sha256": "091422834f3d757c6e814e625b3da0c5ba357f7be809e298ebe3f6c47b221ed0"
+  },
+  "a23-probation-policy-april-26pdf": {
+    "doc_id": "a23-probation-policy-april-26pdf",
+    "source": "employer",
+    "file": "a23-probation-policy-april-26pdf.pdf",
+    "sha256": "e068ba67459fd55c81c9e854cea5b5429d58465b293f2e8616d546de96c95d4d"
+  },
+  "a36-employment-break-policy-april-26": {
+    "doc_id": "a36-employment-break-policy-april-26",
+    "source": "employer",
+    "file": "a36-employment-break-policy-april-26.pdf",
+    "sha256": "fc50e77323e4e7a420f5cce697ddf0e5bc3044d31ef347568ac76ab4739fb45c"
+  },
+  "a38additionalannualleavepurchaseschemeapril26pdf": {
+    "doc_id": "a38additionalannualleavepurchaseschemeapril26pdf",
+    "source": "employer",
+    "file": "a38additionalannualleavepurchaseschemeapril26pdf.pdf",
+    "sha256": "a1a85c13cead5ebce47038b716e56280c9702a66f56276a76e634895c7018db2"
+  },
+  "a39-medical-leave-policy-april-26pdf": {
+    "doc_id": "a39-medical-leave-policy-april-26pdf",
+    "source": "employer",
+    "file": "a39-medical-leave-policy-april-26pdf.pdf",
+    "sha256": "92c90769166641cbc981df03dac69d37a1f449e0448d47239a9fd08de2289ba6"
+  },
+  "b16-trade-union-staff-organisation-recognition-agreement-april-26pdf-12225": {
+    "doc_id": "b16-trade-union-staff-organisation-recognition-agreement-april-26pdf-12225",
+    "source": "employer",
+    "file": "b16-trade-union-staff-organisation-recognition-agreement-april-26pdf-12225.pdf",
+    "sha256": "01ef8a2c6b19f39e3b33e918387fdcf4c1cfe93c2b3bf5a0a652a904f7354548"
+  },
+  "uhn-flexible-retirement-policy-mos-20112023pdf": {
+    "doc_id": "uhn-flexible-retirement-policy-mos-20112023pdf",
+    "source": "employer",
+    "file": "uhn-flexible-retirement-policy-mos-20112023pdf.pdf",
+    "sha256": "edf1e2183603ba1c728de77b6dd033e82a64941dc5becd02719ec25299ad9b17"
+  },
+  "uhn-job-evaluation-feb-26-pdf": {
+    "doc_id": "uhn-job-evaluation-feb-26-pdf",
+    "source": "employer",
+    "file": "uhn-job-evaluation-feb-26-pdf.pdf",
+    "sha256": "4f5d3bfa1f3d2c50e7fb8c67efe613a11bb2e96b3616ce41ecdce7d0b928eac0"
+  },
+  "uhn-organisational-change-and-transformation-april-26-pdf": {
+    "doc_id": "uhn-organisational-change-and-transformation-april-26-pdf",
+    "source": "employer",
+    "file": "uhn-organisational-change-and-transformation-april-26-pdf.pdf",
+    "sha256": "60894e1aee9c7cb0aeb6f47349147b0e3cd1cac6565b7201d84eb4c85d4782a9"
+  },
+  "uhn-pay-protection-april-26pdf": {
+    "doc_id": "uhn-pay-protection-april-26pdf",
+    "source": "employer",
+    "file": "uhn-pay-protection-april-26pdf.pdf",
+    "sha256": "b4cde1e9c98b3b6b5edaeae2d2513fc0f6f83d9972d8986ec78760e23d25757f"
+  }
+}

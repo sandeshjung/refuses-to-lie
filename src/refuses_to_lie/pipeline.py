@@ -6,15 +6,26 @@ from refuses_to_lie.corpus import Chunk, chunk_document, load_all_pages, load_bo
 from refuses_to_lie.intake import parse_cover_sheet
 
 
-def _employer_doc_id(path: Path) -> str:
+def employer_doc_id(path: Path) -> str:
+    """The id an employer policy is indexed under: its cover-sheet reference.
+
+    Public because the provenance register must derive ids exactly the way
+    the loader does -- a mismatch would make the register reject a real
+    document and quietly delete it from every provenance-checked answer.
+    """
     cover_sheet = parse_cover_sheet(path)
     return cover_sheet.doc_ref or path.stem
+
+
+def statutory_doc_id(path: Path) -> str:
+    """Statutory pages have no cover sheet, so the filename is the id."""
+    return path.stem
 
 
 def load_employer_chunks(employer_dir: Path) -> list[Chunk]:
     chunks: list[Chunk] = []
     for pdf_path in sorted(employer_dir.glob("*.pdf")):
-        doc_id = _employer_doc_id(pdf_path)
+        doc_id = employer_doc_id(pdf_path)
         chunks.extend(chunk_document(doc_id, load_body_pages(pdf_path)))
     return chunks
 
@@ -22,7 +33,7 @@ def load_employer_chunks(employer_dir: Path) -> list[Chunk]:
 def load_statutory_chunks(statutory_dir: Path) -> list[Chunk]:
     chunks: list[Chunk] = []
     for pdf_path in sorted(statutory_dir.glob("*.pdf")):
-        chunks.extend(chunk_document(pdf_path.stem, load_all_pages(pdf_path)))
+        chunks.extend(chunk_document(statutory_doc_id(pdf_path), load_all_pages(pdf_path)))
     return chunks
 
 

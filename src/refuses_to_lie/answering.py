@@ -16,6 +16,11 @@ turns on one more stage:
     E  + groundedness verification, dropping unsupported claims
     F  + calibrated abstention on the composite confidence signal
 
+and two extension rungs, built from what the A-F grid measured:
+
+    G  abstention gated on answerability instead of the composite
+    H  + only registered documents may reach the context
+
 Because the rungs are cumulative, a config is a set of flags rather than a
 branch, and adding a rung means adding a stage here rather than forking
 the pipeline.
@@ -25,6 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from refuses_to_lie.answerability import AnswerabilitySignal, check_answerability
 from refuses_to_lie.confidence import (
     AgreementResult,
     ConfidenceSignal,
@@ -61,7 +67,7 @@ class Answer:
     hits: list[Hit]
     citations: list[Citation]
     verdicts: list[ClaimVerdict]
-    confidence: ConfidenceSignal | None
+    confidence: ConfidenceSignal | AnswerabilitySignal | None
     abstained: bool
 
     @property
@@ -74,6 +80,7 @@ def retrieve_context(
     question: str,
     config: RunConfig,
     reranker: Reranker | None = None,
+    trusted_docs: frozenset[str] | None = None,
 ) -> list[Hit]:
     """Rungs A-C: retrieve a wide shortlist, optionally rerank it, then
     narrow to the excerpts that actually go in the prompt.
@@ -92,6 +99,15 @@ def retrieve_context(
     if config.rerank:
         hits = (reranker or get_reranker(config.reranker_model)).rerank(question, hits)
 
+    if config.require_provenance:
+        if trusted_docs is None:
+            # Refuse rather than run unprotected: a provenance rung that
+            # silently skipped its check would report a defence it never had.
+            raise ValueError("require_provenance=True needs trusted_docs from the register")
+        # Filter before narrowing, so the context backfills from the wider
+        # shortlist with registered documents instead of just shrinking.
+        hits = [h for h in hits if h.chunk.doc_id in trusted_docs]
+
     return hits[: config.top_k_context]
 
 
@@ -108,22 +124,60 @@ def _draft_answer(
     return agreement.samples[0], agreement
 
 
+def _refusal(
+    question: str,
+    config: RunConfig,
+    hits: list[Hit],
+    confidence: AnswerabilitySignal | None = None,
+) -> Answer:
+    return Answer(
+        question=question,
+        config_id=config.id,
+        text=ABSTAIN_PHRASE,
+        hits=hits,
+        citations=[],
+        verdicts=[],
+        confidence=confidence,
+        abstained=True,
+    )
+
+
 def answer_question(
     question: str,
     index: Index,
     config: RunConfig,
     cache_key: str | None = None,
     reranker: Reranker | None = None,
+    trusted_docs: frozenset[str] | None = None,
 ) -> Answer:
-    if config.abstain and config.verifier == "off":
+    uses_composite = config.abstain and config.confidence_source == "composite"
+    if uses_composite and config.verifier == "off":
         raise ValueError(
             "abstain=True needs a verifier: groundedness is one of the three inputs "
             "to the confidence signal, and without it the score is not comparable "
             "to a threshold calibrated with it."
         )
 
-    hits = retrieve_context(index, question, config, reranker=reranker)
-    draft, agreement = _draft_answer(question, hits, config, cache_key)
+    hits = retrieve_context(
+        index, question, config, reranker=reranker, trusted_docs=trusted_docs
+    )
+    if not hits:
+        # Provenance can empty the context entirely. Nothing trustworthy to
+        # answer from is the textbook case for refusing.
+        return _refusal(question, config, hits)
+
+    gate: AnswerabilitySignal | None = None
+    if config.abstain and config.confidence_source == "answerability":
+        # Asked before generating, so a refusal costs no generator call --
+        # the constrained resource on this project.
+        gate_key = f"{cache_key}-answerability" if cache_key else None
+        gate = check_answerability(question, hits, config, cache_key=gate_key)
+        if should_abstain(gate, config.abstain_threshold):
+            return _refusal(question, config, hits, confidence=gate)
+        draft = generate_answer(question, hits, config, cache_key=cache_key)
+        agreement = None
+    else:
+        draft, agreement = _draft_answer(question, hits, config, cache_key)
 
     verified: VerifiedAnswer | None = None
     if config.verifier != "off":
@@ -134,8 +188,8 @@ def answer_question(
         text = drop_unsupported_claims(verified)
 
     abstained = draft.abstained
-    confidence: ConfidenceSignal | None = None
-    if config.abstain:
+    confidence: ConfidenceSignal | AnswerabilitySignal | None = gate
+    if uses_composite:
         # Both are non-None here: agreement comes from _draft_answer whenever
         # abstain is set, and verified from the guard at the top of this function.
         assert agreement is not None and verified is not None

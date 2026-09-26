@@ -70,3 +70,135 @@ def test_ladder_rungs_turn_stages_on_cumulatively():
     assert E.verifier == "drop_unsupported" and F.verifier == "drop_unsupported"
     assert not E.abstain and F.abstain
     assert F.require_citations, "abstention measures citation agreement, so D must stay on"
+
+
+# --- extension rungs G and H -----------------------------------------------
+# These stub the two LLM calls, so they verify the orchestration -- what is
+# called, when, and what reaches the context -- without spending quota.
+
+
+class _Calls:
+    def __init__(self) -> None:
+        self.generate = 0
+        self.gate = 0
+
+
+def _stub_llms(monkeypatch, verdict: str) -> _Calls:
+    from refuses_to_lie import answering
+    from refuses_to_lie.answerability import SCORES, AnswerabilitySignal
+    from refuses_to_lie.generation import GeneratedAnswer
+
+    calls = _Calls()
+
+    def fake_gate(question, hits, config, cache_key=None):
+        calls.gate += 1
+        return AnswerabilitySignal(verdict, SCORES.get(verdict, 0.0))
+
+    def fake_generate(question, hits, config, cache_key=None):
+        calls.generate += 1
+        return GeneratedAnswer(question, "An answer.", [], [h.chunk.chunk_id for h in hits])
+
+    monkeypatch.setattr(answering, "check_answerability", fake_gate)
+    monkeypatch.setattr(answering, "generate_answer", fake_generate)
+    monkeypatch.setattr(answering, "verify_answer", lambda draft, hits, config, **_: None)
+    return calls
+
+
+def test_gate_refusal_costs_no_generation(index: Index, monkeypatch):
+    # The point of asking before generating: a "no" spends nothing on the
+    # generator, which is the rate-limited provider.
+    from dataclasses import replace
+
+    from refuses_to_lie.config import G
+
+    calls = _stub_llms(monkeypatch, "UNANSWERABLE")
+    answer = answer_question("anything", index, replace(G, verifier="off"))
+
+    assert answer.abstained
+    assert calls.gate == 1
+    assert calls.generate == 0
+    assert answer.confidence is not None and answer.confidence.composite == 0.0
+
+
+def test_partial_context_is_refused_at_rung_gs_threshold(index: Index, monkeypatch):
+    # The near-miss case: the topic is covered, the specific point is not.
+    from dataclasses import replace
+
+    from refuses_to_lie.config import G
+
+    calls = _stub_llms(monkeypatch, "PARTIAL")
+    answer = answer_question("anything", index, replace(G, verifier="off"))
+    assert answer.abstained and calls.generate == 0
+
+
+def test_answerable_context_is_generated_once_not_sampled(index: Index, monkeypatch):
+    # Rung F samples three times to measure agreement; G drops agreement,
+    # so it must not keep paying for it.
+    from dataclasses import replace
+
+    from refuses_to_lie.config import G
+
+    calls = _stub_llms(monkeypatch, "ANSWERABLE")
+    answer = answer_question("anything", index, replace(G, verifier="off"))
+
+    assert not answer.abstained
+    assert calls.generate == 1
+
+
+def test_answerability_rung_does_not_require_a_verifier(index: Index, monkeypatch):
+    # The verifier requirement exists because groundedness feeds the
+    # composite; the answerability gate does not use it.
+    from dataclasses import replace
+
+    from refuses_to_lie.config import G
+
+    _stub_llms(monkeypatch, "ANSWERABLE")
+    answer_question("anything", index, replace(G, verifier="off"))  # must not raise
+
+
+def test_provenance_filter_keeps_only_registered_documents(index: Index):
+    from dataclasses import replace
+
+    trusted = frozenset({"a36"})
+    open_hits = retrieve_context(index, "career break eligibility", B)
+    guarded = retrieve_context(
+        index,
+        "career break eligibility",
+        replace(B, require_provenance=True),
+        trusted_docs=trusted,
+    )
+    assert {h.chunk.doc_id for h in guarded} <= trusted
+    assert len(guarded) == len(open_hits)  # a36 is registered, so nothing is lost
+
+
+def test_an_unregistered_corpus_leaves_nothing_to_answer_from(index: Index, monkeypatch):
+    # Every hit filtered out must mean a refusal, reached without asking
+    # either model -- not a crash inside generate_answer.
+    from dataclasses import replace
+
+    from refuses_to_lie.config import H
+
+    calls = _stub_llms(monkeypatch, "ANSWERABLE")
+    answer = answer_question(
+        "career break eligibility", index, replace(H, verifier="off"), trusted_docs=frozenset()
+    )
+    assert answer.abstained
+    assert answer.hits == []
+    assert calls.gate == 0 and calls.generate == 0
+
+
+def test_provenance_without_a_register_refuses_to_run(index: Index):
+    # A provenance rung that silently skipped its check would report a
+    # defence it never applied.
+    from dataclasses import replace
+
+    with pytest.raises(ValueError, match="trusted_docs"):
+        retrieve_context(index, "anything", replace(B, require_provenance=True))
+
+
+def test_extension_rungs_build_on_the_full_system():
+    from refuses_to_lie.config import G, H
+
+    assert G.confidence_source == "answerability" and G.abstain
+    assert H.require_provenance and H.confidence_source == "answerability"
+    assert not F.require_provenance and F.confidence_source == "composite"

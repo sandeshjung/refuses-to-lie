@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import itertools
 from dataclasses import dataclass, field
+from typing import Protocol
 
 from refuses_to_lie.config import RunConfig
 from refuses_to_lie.generation import GeneratedAnswer, generate_answer
@@ -156,5 +157,13 @@ def compute_confidence(
     )
 
 
-def should_abstain(signal: ConfidenceSignal, threshold: float) -> bool:
+class HasComposite(Protocol):
+    """Anything abstention can threshold: the composite score or, for rung G,
+    the answerability signal that replaced it."""
+
+    @property
+    def composite(self) -> float: ...
+
+
+def should_abstain(signal: HasComposite, threshold: float) -> bool:
     return signal.composite < threshold
