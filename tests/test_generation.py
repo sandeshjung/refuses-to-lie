@@ -19,6 +19,7 @@ def index() -> Index:
     return Index(chunks)
 
 
+@pytest.mark.live
 def test_generate_answer_with_citations(index: Index):
     hits = index.search_hybrid("Can unused annual leave be carried into the next year?", k=4)
 
@@ -37,6 +38,7 @@ def test_generate_answer_with_citations(index: Index):
         assert citation.cite_label.startswith("UHN-PO-HR24")
 
 
+@pytest.mark.live
 def test_generate_answer_without_citations_extracts_none(index: Index):
     hits = index.search_hybrid("Can unused annual leave be carried into the next year?", k=4)
 

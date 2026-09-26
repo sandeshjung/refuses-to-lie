@@ -121,6 +121,7 @@ def test_should_abstain_at_or_above_threshold():
     assert should_abstain(signal, threshold=0.5) is False
 
 
+@pytest.mark.live
 def test_sample_agreement_real_question_gets_consistent_citations():
     chunks = chunk_document(
         "UHN-PO-HR24",

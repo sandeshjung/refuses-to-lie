@@ -69,6 +69,7 @@ def test_with_backoff_does_not_retry_non_retryable_errors():
     assert len(calls) == 1
 
 
+@pytest.mark.live
 def test_call_gemini_writes_and_reuses_cache(tmp_path):
     cache_dir = tmp_path / "llm_cache"
     result = call_gemini(
@@ -91,6 +92,7 @@ def test_call_gemini_writes_and_reuses_cache(tmp_path):
     assert cached_result == result
 
 
+@pytest.mark.live
 def test_call_groq_writes_and_reuses_cache(tmp_path):
     cache_dir = tmp_path / "llm_cache"
     result = call_groq(

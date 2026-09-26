@@ -38,6 +38,7 @@ def test_parse_verdict_distinguishes_supported_from_unsupported():
     assert _parse_verdict("garbage response") == "UNKNOWN"
 
 
+@pytest.mark.live
 def test_verify_answer_flags_an_unsupported_claim(index: Index):
     hits = index.search_hybrid("Can unused annual leave be carried into the next year?", k=4)
     target_chunk_id = hits[0].chunk.chunk_id
@@ -62,6 +63,7 @@ def test_verify_answer_flags_an_unsupported_claim(index: Index):
     assert verified.all_supported is False
 
 
+@pytest.mark.live
 def test_verify_answer_confirms_a_supported_claim(index: Index):
     hits = index.search_hybrid("Can unused annual leave be carried into the next year?", k=4)
     target_chunk_id = hits[0].chunk.chunk_id

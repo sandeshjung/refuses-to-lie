@@ -49,3 +49,10 @@ check_untyped_defs = true
 [[tool.mypy.overrides]]
 module = ["rank_bm25.*", "reportlab.*"]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# Tests marked `live` call real Gemini/Groq endpoints. They spend free-tier
+# quota and fail whenever that quota is exhausted, so the default run skips
+# them. Run them deliberately with: uv run pytest -m live
+markers = ["live: calls a real LLM provider (spends quota; needs API keys)"]
+addopts = "-m 'not live'"
